@@ -13,7 +13,7 @@ permissions:
   id-token: write
 
 env:
-  IMAGE: ${{ vars.QUAY_IMAGE }}
+  IMAGE: ${{ vars.QUAY_IMAGE || secrets.QUAY_IMAGE }}
 
 jobs:
   promote:
