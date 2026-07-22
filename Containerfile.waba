@@ -1,9 +1,11 @@
 FROM registry.redhat.io/rhel10/rhel-bootc:latest
 
+# Build-time args (passed from CI)
 ARG RHSM_ACTIVATION_KEY
 ARG RHSM_ORG
 ARG DEMO_PUB_KEY
 
+# Register, enable repos, install packages, then unregister and clean entitlement files in one RUN
 RUN set -ex; \
     arch=$(uname -m); \
     if [ "$arch" = "x86_64" ]; then \
@@ -14,11 +16,8 @@ RUN set -ex; \
       repo_arch="x86_64"; \
     fi; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
-      rhsm_config_file=$(find /usr/lib64 /usr/lib -name config.py | grep rhsm | head -n 1); \
-      if [ -f "$rhsm_config_file" ]; then \
-        cp "$rhsm_config_file" "${rhsm_config_file}.bak"; \
-        sed -i 's/\(def in_container() -> bool:\)/\1\n    return False/g' "$rhsm_config_file"; \
-      fi; \
+      #subscription-manager register --force --activationkey="$RHSM_ACTIVATION_KEY" --org="$RHSM_ORG" || true; \
+      #subscription-manager repos --enable=rhel-10-for-${repo_arch}-baseos-rpms --enable=rhel-10-for-${repo_arch}-appstream-rpms || true; \
       subscription-manager register --force --activationkey="$RHSM_ACTIVATION_KEY" --org="$RHSM_ORG"; \
       subscription-manager repos --enable=rhel-10-for-${repo_arch}-baseos-rpms --enable=rhel-10-for-${repo_arch}-appstream-rpms; \
     else \
@@ -32,19 +31,16 @@ RUN set -ex; \
       vim-enhanced \
       bash-completion \
       sudo \
-      selinux-policy-targeted \
+      selinux-policy-targeted \ 
       qemu-guest-agent \
-      policycoreutils --nogpgcheck; \
-    if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
-      if subscription-manager identity >/dev/null 2>&1; then \
-        subscription-manager unregister || true; \
-        subscription-manager clean || true; \
-      fi; \
-      if [ -f "${rhsm_config_file}.bak" ]; then \
-        mv "${rhsm_config_file}.bak" "$rhsm_config_file"; \
-      fi; \
+      policycoreutils; \
+    # Unregister & remove entitlement files so credentials are not present in final image
+    if subscription-manager identity >/dev/null 2>&1; then \
+      subscription-manager unregister || true; \
+      subscription-manager clean || true; \
       rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
-    fi 
+    fi
+
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
 COPY scripts/vm-status.sh /usr/local/bin/vm-status

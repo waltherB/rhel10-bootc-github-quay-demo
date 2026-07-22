@@ -258,7 +258,7 @@ clear
 echo ""
 echo -e "${CYAN}${BOLD}"
 echo "  ╔══════════════════════════════════════════════════╗"
-echo "  ║   RHEL 10 Image Mode Demo                       ║"
+echo "  ║   RHEL 10 Image Mode Demo                        ║"
 echo "  ║   GitHub Actions · Quay · OpenShift Virt         ║"
 echo "  ╚══════════════════════════════════════════════════╝"
 echo -e "${RESET}"
@@ -345,7 +345,7 @@ if should_run "2"; then
   narrate "PLATFORM defaults to linux/arm64 – no cross-compilation needed"
   echo ""
 
-  export TARGET_PLATFORM="linux/arm64"
+  #export TARGET_PLATFORM="linux/arm64"
   note "IMAGE=${IMAGE}  TARGET_PLATFORM=${TARGET_PLATFORM}"
   pause "Press ENTER to start local build..."
   run ./scripts/local-build.sh
