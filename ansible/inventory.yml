@@ -1,0 +1,6 @@
+---
+all:
+  hosts:
+    sno:
+      ansible_host: REPLACE_WITH_SNO_API_URL   # e.g. api.your-cluster.example.com
+      ansible_connection: local                 # kubectl/oc runs locally against the cluster

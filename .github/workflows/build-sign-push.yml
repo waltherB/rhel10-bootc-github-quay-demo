@@ -1,0 +1,220 @@
+name: build-sign-push-rhel10-bootc
+
+on:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  IMAGE: ${{ vars.QUAY_IMAGE }}
+  # Force build for arm64
+  TARGET_PLATFORM: 'linux/arm64'
+
+jobs:
+  build-sign-push:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install tools (if not already present)
+        run: |
+          if command -v apt-get &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y podman skopeo jq
+          elif command -v dnf &>/dev/null; then
+            sudo dnf install -y podman skopeo jq
+          else
+            echo "Neither apt-get nor dnf found — assuming tools are pre-installed on runner"
+          fi
+
+      - name: Login to Red Hat Registry
+        run: |
+          echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
+            podman login registry.redhat.io \
+              -u "${{ secrets.RH_REGISTRY_USERNAME }}" \
+              --password-stdin
+
+      - name: Login to Quay
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | \
+            podman login quay.io \
+              -u "${{ secrets.QUAY_USERNAME }}" \
+              --password-stdin
+
+      - name: Compute tags
+        id: meta
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          SHORT_SHA="$(echo "${GITHUB_SHA}" | cut -c1-12)"
+
+          # Only create a versioned tag for git tags (v*); plain pushes to main just update :dev
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            VERSION_TAG="${GITHUB_REF#refs/tags/}"
+          else
+            VERSION_TAG=""
+          fi
+
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "version_tag=${VERSION_TAG}" >> "$GITHUB_OUTPUT"
+
+          echo "Computed SHORT_SHA=${SHORT_SHA}"
+          echo "Computed VERSION_TAG=${VERSION_TAG:-none (dev only)}"
+
+      - name: Validate image reference
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLEAN_IMAGE="$(echo "${IMAGE}" | tr -d '\r\n' | xargs)"
+          CLEAN_PLATFORM="$(echo "${TARGET_PLATFORM}" | tr -d '\r\n' | xargs)"
+
+          echo "IMAGE=${CLEAN_IMAGE}"
+          echo "TARGET_PLATFORM=${CLEAN_PLATFORM}"
+          echo "VERSION_TAG=${{ steps.meta.outputs.version_tag }}"
+          echo "DEV_REF=${CLEAN_IMAGE}:dev"
+          echo "VERSION_REF=${CLEAN_IMAGE}:${{ steps.meta.outputs.version_tag }}"
+
+          if [[ -z "${CLEAN_IMAGE}" ]]; then
+            echo "ERROR: IMAGE is empty. Check GitHub variable QUAY_IMAGE."
+            exit 1
+          fi
+
+          if [[ "${CLEAN_IMAGE}" =~ [[:space:]] ]]; then
+            echo "ERROR: IMAGE contains whitespace: '${CLEAN_IMAGE}'"
+            exit 1
+          fi
+
+          if [[ "${CLEAN_IMAGE}" == *"@"* ]]; then
+            echo "ERROR: IMAGE contains @. Use quay.io/waba/bootc-guide, not quay.io/waba@atea.dk/..."
+            exit 1
+          fi
+
+      - name: Build RHEL bootc image
+        id: build
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLEAN_IMAGE="$(echo "${IMAGE}" | tr -d '\r\n' | xargs)"
+          CLEAN_PLATFORM="$(echo "${TARGET_PLATFORM}" | tr -d '\r\n' | xargs)"
+          VERSION_TAG="${{ steps.meta.outputs.version_tag }}"
+
+          # We only build arm64
+          PLATFORM="linux/arm64"
+
+          echo "Detected/selected platform: ${PLATFORM}"
+          echo "platform=${PLATFORM}" >> "$GITHUB_OUTPUT"
+
+          # Detect if we are cross-compiling (build platform != runner platform)
+          RUNNER_PLATFORM="linux/amd64"
+          [[ "$(uname -m)" == "aarch64" || "$(uname -m)" == "arm64" ]] && RUNNER_PLATFORM="linux/arm64"
+          if [[ "${PLATFORM}" != "${RUNNER_PLATFORM}" ]]; then
+            echo "cross_compile=true" >> "$GITHUB_OUTPUT"
+            echo "Cross-compiling ${PLATFORM} on ${RUNNER_PLATFORM} runner"
+          else
+            echo "cross_compile=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          podman build \
+            --platform "${PLATFORM}" \
+            --build-arg RHSM_ACTIVATION_KEY="${{ secrets.RHSM_ACTIVATION_KEY }}" \
+            --build-arg RHSM_ORG="${{ secrets.RHSM_ORG }}" \
+            -t "${CLEAN_IMAGE}:dev" \
+            $([[ -n "${{ steps.meta.outputs.version_tag }}" ]] && echo "-t ${CLEAN_IMAGE}:${{ steps.meta.outputs.version_tag }}") \
+            .
+
+      - name: Smoke test image as container
+        if: steps.build.outputs.cross_compile == 'false'
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          RUNNER_ARCH="$(uname -m)"
+          CLEAN_PLATFORM="linux/arm64"
+
+          # Cannot run containers of different arch without qemu — skip
+          if [[ "${RUNNER_ARCH}" == "x86_64" && "${CLEAN_PLATFORM}" == "linux/arm64" ]] || [[ ("${RUNNER_ARCH}" == "arm64" || "${RUNNER_ARCH}" == "aarch64") && "${CLEAN_PLATFORM}" == "linux/amd64" ]]; then
+            echo "Smoke test skipped: cross-compiling ${CLEAN_PLATFORM} on ${RUNNER_ARCH} runner."
+            exit 0
+          fi
+
+          CLEAN_IMAGE="$(echo "${IMAGE}" | tr -d '\r\n' | xargs)"
+          podman rm -f bootc-test 2>/dev/null || true
+          podman run --rm -d -p 8080:80 --name bootc-test "${CLEAN_IMAGE}:dev"
+          sleep 5
+          for i in {1..10}; do
+            if curl -fsS http://127.0.0.1:8080 | head; then break; fi
+            echo "Attempt $i failed, retrying..."
+            sleep 2
+            if [[ $i -eq 10 ]]; then
+              podman stop bootc-test || true
+              exit 1
+            fi
+          done
+          podman exec bootc-test cat /etc/motd
+          podman stop bootc-test
+
+      - name: Push tags to Quay
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLEAN_IMAGE="$(echo "${IMAGE}" | tr -d '\r\n' | xargs)"
+          VERSION_TAG="${{ steps.meta.outputs.version_tag }}"
+
+          podman push "${CLEAN_IMAGE}:dev"
+
+          # Only push versioned tag when building from a git tag
+          if [[ -n "${VERSION_TAG}" ]]; then
+            podman push "${CLEAN_IMAGE}:${VERSION_TAG}"
+          fi
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign pushed images with keyless Cosign
+        shell: bash
+        env:
+          COSIGN_YES: "true"
+        run: |
+          set -euo pipefail
+
+          # Authenticate cosign to Quay.io
+          cosign login quay.io \
+            -u "${{ secrets.QUAY_USERNAME }}" \
+            -p "${{ secrets.QUAY_TOKEN }}"
+
+          CLEAN_IMAGE="$(echo "${IMAGE}" | tr -d '\r\n' | xargs)"
+          VERSION_TAG="${{ steps.meta.outputs.version_tag }}"
+
+          cosign sign "${CLEAN_IMAGE}:dev"
+
+          # Only sign versioned tag when building from a git tag
+          if [[ -n "${VERSION_TAG}" ]]; then
+            cosign sign "${CLEAN_IMAGE}:${VERSION_TAG}"
+          fi
+
+      - name: Verify signatures
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          CLEAN_IMAGE="$(echo "${IMAGE}" | tr -d '\r\n' | xargs)"
+
+          cosign verify "${CLEAN_IMAGE}:dev" \
+            --certificate-identity-regexp "https://github.com/.+" \
+            --certificate-oidc-issuer "https://token.actions.githubusercontent.com"

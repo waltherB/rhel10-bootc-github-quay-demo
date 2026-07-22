@@ -1,0 +1,65 @@
+apiVersion: kubevirt.io/v1
+kind: VirtualMachine
+metadata:
+  name: rhel10-bootc-demo
+  namespace: bootc-vms
+  labels:
+    app: rhel10-bootc-demo
+spec:
+  running: true
+  template:
+    metadata:
+      labels:
+        kubevirt.io/vm: rhel10-bootc-demo
+    spec:
+      serviceAccountName: bootc-vm-sa
+      domain:
+        cpu:
+          cores: 2
+        memory:
+          guest: 2Gi
+        devices:
+          disks:
+            - name: bootdisk
+              disk:
+                bus: virtio
+              bootOrder: 1
+            - name: cloudinit
+              disk:
+                bus: virtio
+          interfaces:
+            - name: default
+              masquerade: {}
+      networks:
+        - name: default
+          pod: {}
+      volumes:
+        - name: bootdisk
+          dataVolume:
+            name: rhel10-bootc-demo-dv
+        - name: cloudinit
+          cloudInitNoCloud:
+            userData: |
+              #cloud-config
+              hostname: rhel10-bootc-demo
+              ssh_authorized_keys:
+                - REPLACE_WITH_YOUR_SSH_PUBLIC_KEY
+  dataVolumeTemplates:
+    - metadata:
+        name: rhel10-bootc-demo-dv
+      spec:
+        pvc:
+          storageClassName: lvms-vg1   # adjust to your SNO StorageClass
+          accessModes:
+            - ReadWriteOnce
+          resources:
+            requests:
+              storage: 30Gi
+        source:
+          # registry source: CDI pulls the bootc OCI image and uses it as
+          # the VM disk. bootc images are valid disk images in OCI format.
+          # pullMethod: node uses the node's CRI to pull (faster than pod).
+          registry:
+            url: quay.io/waba/bootc-guide:prod
+            secretRef: quay-pull-secret
+            pullMethod: node

@@ -1,0 +1,58 @@
+name: promote-rhel10-bootc-prod
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_tag:
+        description: "Existing source tag to promote, for example dev or v1.0.0"
+        required: true
+        default: "dev"
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  IMAGE: ${{ vars.QUAY_IMAGE }}
+
+jobs:
+  promote:
+    runs-on: self-hosted
+    steps:
+      - name: Install tools (if not already present)
+        run: |
+          if command -v apt-get &>/dev/null; then
+            sudo apt-get update && sudo apt-get install -y skopeo
+          elif command -v dnf &>/dev/null; then
+            sudo dnf install -y skopeo
+          else
+            echo "Neither apt-get nor dnf found — assuming skopeo is pre-installed on runner"
+          fi
+
+      - name: Login to Quay (skopeo)
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | \
+            skopeo login quay.io \
+              -u "${{ secrets.QUAY_USERNAME }}" \
+              --password-stdin
+
+      - name: Promote selected tag to prod
+        run: |
+          skopeo copy \
+            docker://${IMAGE}:${{ github.event.inputs.source_tag }} \
+            docker://${IMAGE}:prod
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Login to Quay (cosign)
+        run: |
+          cosign login quay.io \
+            -u "${{ secrets.QUAY_USERNAME }}" \
+            -p "${{ secrets.QUAY_TOKEN }}"
+
+      - name: Sign prod tag
+        env:
+          COSIGN_YES: "true"
+        run: |
+          cosign sign "${IMAGE}:prod"

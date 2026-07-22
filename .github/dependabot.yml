@@ -1,0 +1,26 @@
+version: 2
+
+updates:
+  # 🔄 Opdater GitHub Actions
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+
+    # 🧠 Labels (valgfrit men godt)
+    labels:
+      - "dependencies"
+      - "github-actions"
+
+    # 👀 PR titel format
+    commit-message:
+      prefix: "chore"
+      include: "scope"
+
+    # ✅ Ignorer breaking majors hvis du vil være konservativ
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]

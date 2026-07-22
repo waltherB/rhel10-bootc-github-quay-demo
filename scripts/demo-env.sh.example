@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+# ============================================================
+#  Demo environment variables
+#  Sourced automatically by scripts/demo-run.sh
+#  NOT committed to git — fill in your values here
+# ============================================================
+
+# RH subscriptions
+export RHSM_ACTIVATION_KEY=
+export RHSM_ORG=
+
+
+# IMAGE must include the tag — used for tag-stripping logic (:dev → :dev-disk etc.)
+export IMAGE="quay.io/xxx/yyyyy:dev"
+export TARGET_PLATFORM="linux/arm64"
+
+export VM_SSH="demo@192.168.64.9"
+export VM_SSH_KEY="${HOME}/.ssh/id_ed25519"
+export VM_USER="demo"
+
+export SNO_API="https://api.xxx-sno.example.lan:6443"
+export SNO_TOKEN="$(oc whoami -t 2>/dev/null || true)"
+
+# Uncomment to skip the qcow2 rebuild when restarting at step 9a.
+# The promote (:dev-disk → :prod-disk) will still run but is a fast skopeo copy.
+# export DISK_IMAGE="quay.io/waba/bootc-guide:prod-disk"
+
+# Quay auth for Ansible (auto-generated from Podman auth file)
+export QUAY_DOCKER_CONFIG_B64="$(base64 < ~/.config/containers/auth.json 2>/dev/null || true)"

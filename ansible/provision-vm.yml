@@ -1,0 +1,367 @@
+---
+# Provision a RHEL 10 bootc VM on OpenShift Virtualization (KubeVirt).
+#
+# Prerequisites on your Mac:
+#   pip install ansible kubernetes
+#   ansible-galaxy collection install -r ansible/requirements.yml
+#   oc login https://api.your-cluster.example.com --token=<token>
+#
+# Run:
+#   ansible-playbook ansible/provision-vm.yml \
+#     -e disk_image=quay.io/waba/bootc-guide:prod-disk
+#
+# Variables (override on CLI with -e or edit defaults below):
+#   disk_image   - KubeVirt containerDisk OCI image on Quay
+#                  Build with: IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-push-disk.sh
+#                  (FROM scratch image with /disk/disk.qcow2 — CDI knows this format)
+#   vm_name      - VM object name       (default: rhel10-bootc-demo)
+#   vm_namespace - target namespace     (default: bootc-vms)
+#   ssh_pub_key  - SSH public key injected via cloud-init
+
+- name: Provision RHEL 10 bootc VM on OpenShift Virtualization
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    # disk_image: KubeVirt containerDisk OCI image pushed to Quay by local-push-disk.sh.
+    # This is a FROM-scratch image with the qcow2 at /disk/disk.qcow2.
+    # CDI's registry importer natively understands this format (pullMethod: node
+    # means the cluster node's CRI pulls it, so no extra HTTP server is needed).
+    # Build it with:
+    #   IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-qcow2.sh
+    #   IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-push-disk.sh
+    disk_image: "quay.io/waba/bootc-guide:prod-disk"
+    vm_name: "rhel10-bootc-demo"
+    vm_namespace: "bootc-vms"
+    vm_cores: 2
+    vm_memory: "2Gi"
+    vm_disk_size: "60Gi"
+    vm_storage_class: "lvms-vg1"
+    ssh_pub_key: "{{ lookup('file', lookup('env', 'HOME') + '/.ssh/id_ed25519.pub') }}"
+    pull_secret_name: "waba-bootc-account-pull-secret"
+
+  tasks:
+    - name: Ensure namespace exists with required pod-security labels
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Namespace
+          metadata:
+            name: "{{ vm_namespace }}"
+            labels:
+              pod-security.kubernetes.io/enforce: privileged
+              pod-security.kubernetes.io/audit: privileged
+              pod-security.kubernetes.io/warn: privileged
+
+    - name: Validate disk_image is set
+      assert:
+        that:
+          - disk_image is defined
+          - disk_image | length > 0
+          - '"REPLACE" not in disk_image'
+        fail_msg: >
+          disk_image is not set. Build a containerDisk image from the bootc image with:
+            IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-qcow2.sh
+            IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-push-disk.sh
+          Then pass -e disk_image=quay.io/waba/bootc-guide:prod-disk
+
+    - name: Read local docker config for Quay auth
+      set_fact:
+        docker_config: "{{ lookup('file', '~/.docker/config.json') | from_json }}"
+
+    - name: Parse Quay credentials
+      set_fact:
+        quay_auth: "{{ (docker_config.auths['quay.io'].auth | default(docker_config.auths['https://quay.io'].auth) | b64decode).split(':', 1) }}"
+      no_log: true
+
+    - name: Create CDI-compatible pull secret for Quay
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: Secret
+          metadata:
+            name: quay-cdi-pull-secret
+            namespace: "{{ vm_namespace }}"
+            annotations:
+              cdi.kubevirt.io/secret: "true"
+          type: Opaque
+          data:
+            accessKeyId: "{{ quay_auth[0] | b64encode }}"
+            secretKey: "{{ quay_auth[1] | b64encode }}"
+
+    - name: Create ServiceAccount for VM pod
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: v1
+          kind: ServiceAccount
+          metadata:
+            name: bootc-vm-sa
+            namespace: "{{ vm_namespace }}"
+          imagePullSecrets:
+            - name: "{{ pull_secret_name }}"
+
+    - name: Create RBAC Role for VM SA
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: Role
+          metadata:
+            name: bootc-vm-role
+            namespace: "{{ vm_namespace }}"
+          rules:
+            - apiGroups: [""]
+              resources: ["persistentvolumeclaims"]
+              verbs: ["get", "list", "watch", "create", "delete", "patch", "update"]
+            - apiGroups: ["cdi.kubevirt.io"]
+              resources: ["datavolumes"]
+              verbs: ["get", "list", "watch", "create", "delete", "patch", "update"]
+
+    - name: Bind RBAC Role to VM SA
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: rbac.authorization.k8s.io/v1
+          kind: RoleBinding
+          metadata:
+            name: bootc-vm-rolebinding
+            namespace: "{{ vm_namespace }}"
+          subjects:
+            - kind: ServiceAccount
+              name: bootc-vm-sa
+              namespace: "{{ vm_namespace }}"
+          roleRef:
+            kind: Role
+            name: bootc-vm-role
+            apiGroup: rbac.authorization.k8s.io
+
+    - name: Delete existing VirtualMachine if present
+      kubernetes.core.k8s:
+        state: absent
+        api_version: kubevirt.io/v1
+        kind: VirtualMachine
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      ignore_errors: true
+
+    - name: Delete existing DataVolume if present
+      kubernetes.core.k8s:
+        state: absent
+        api_version: cdi.kubevirt.io/v1beta1
+        kind: DataVolume
+        name: "{{ vm_name }}-dv"
+        namespace: "{{ vm_namespace }}"
+      ignore_errors: true
+
+    - name: Delete existing PVC if present
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: PersistentVolumeClaim
+        name: "{{ vm_name }}-dv"
+        namespace: "{{ vm_namespace }}"
+      ignore_errors: true
+
+    - name: Delete existing VM pods if present
+      kubernetes.core.k8s:
+        state: absent
+        api_version: v1
+        kind: Pod
+        namespace: "{{ vm_namespace }}"
+        label_selectors:
+          - "kubevirt.io/vm={{ vm_name }}"
+      ignore_errors: true
+
+    - name: Wait for cleanup to complete
+      pause:
+        seconds: 10
+
+    - name: Create DataVolume importing from containerDisk OCI image on Quay
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: cdi.kubevirt.io/v1beta1
+          kind: DataVolume
+          metadata:
+            name: "{{ vm_name }}-dv"
+            namespace: "{{ vm_namespace }}"
+          spec:
+            source:
+              # registry source with pullMethod: node uses the cluster node's CRI
+              # to pull the containerDisk image directly from Quay — no HTTP server
+              # needed. The image must be a FROM-scratch OCI image with the disk
+              # at /disk/disk.qcow2 (built by scripts/local-push-disk.sh).
+              registry:
+                url: "docker://{{ disk_image }}"
+                secretRef: quay-cdi-pull-secret
+                pullMethod: node
+            pvc:
+              storageClassName: "{{ vm_storage_class }}"
+              accessModes:
+                - ReadWriteOnce
+              volumeMode: Filesystem
+              resources:
+                requests:
+                  storage: "{{ vm_disk_size }}"
+
+    - name: Create VirtualMachine (this will trigger the PVC binding)
+      kubernetes.core.k8s:
+        state: present
+        definition:
+          apiVersion: kubevirt.io/v1
+          kind: VirtualMachine
+          metadata:
+            name: "{{ vm_name }}"
+            namespace: "{{ vm_namespace }}"
+            labels:
+              app: "{{ vm_name }}"
+          spec:
+            running: true
+            template:
+              metadata:
+                labels:
+                  kubevirt.io/vm: "{{ vm_name }}"
+              spec:
+                serviceAccountName: bootc-vm-sa
+                domain:
+                  cpu:
+                    cores: "{{ vm_cores }}"
+                  memory:
+                    guest: "{{ vm_memory }}"
+                  devices:
+                    disks:
+                      - name: bootdisk
+                        disk:
+                          bus: virtio
+                        bootOrder: 1
+                      - name: cloudinit
+                        disk:
+                          bus: virtio
+                    interfaces:
+                      - name: default
+                        masquerade: {}
+                networks:
+                  - name: default
+                    pod: {}
+                volumes:
+                  - name: bootdisk
+                    dataVolume:
+                      name: "{{ vm_name }}-dv"
+                  - name: cloudinit
+                    cloudInitNoCloud:
+                      userData: |
+                        #cloud-config
+                        hostname: {{ vm_name }}
+                        ssh_authorized_keys:
+                          - {{ ssh_pub_key }}
+                        packages:
+                          - qemu-guest-agent
+                        runcmd:
+                          - systemctl enable --now qemu-guest-agent
+
+    - name: Wait for DataVolume to start importing (PVC will bind when VM starts)
+      kubernetes.core.k8s_info:
+        api_version: cdi.kubevirt.io/v1beta1
+        kind: DataVolume
+        name: "{{ vm_name }}-dv"
+        namespace: "{{ vm_namespace }}"
+      register: dv
+      until: 
+        - dv.resources | length > 0
+        - dv.resources[0].status.phase is defined
+        - dv.resources[0].status.phase != "Failed"
+      retries: 30
+      delay: 10
+
+    - name: Show DataVolume status
+      debug:
+        msg: 
+          - "DataVolume Phase: {{ dv.resources[0].status.phase | default('Unknown') }}"
+          - "DataVolume Progress: {{ dv.resources[0].status.progress | default('N/A') }}"
+
+    - name: Wait for DataVolume import to complete
+      kubernetes.core.k8s_info:
+        api_version: cdi.kubevirt.io/v1beta1
+        kind: DataVolume
+        name: "{{ vm_name }}-dv"
+        namespace: "{{ vm_namespace }}"
+      register: dv
+      until: >
+        dv.resources | length > 0 and
+        dv.resources[0].status.phase == "Succeeded"
+      retries: 180
+      delay: 10
+
+    - name: Wait for VM to start
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      register: vmi
+      until: >
+        vmi.resources | length > 0 and
+        vmi.resources[0].status.phase == "Running"
+      retries: 60
+      delay: 10
+
+    - name: Get VM IP address
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      register: vmi
+
+    - name: Display VM connection info
+      debug:
+        msg: |
+          ==========================================
+          VM {{ vm_name }} is running!
+          ==========================================
+          
+          IP Address: {{ vmi.resources[0].status.interfaces[0].ipAddress | default('Pending') }}
+          
+          SSH Connection:
+          ssh demo@{{ vmi.resources[0].status.interfaces[0].ipAddress | default('<pending>') }}
+          
+          ==========================================
+          Troubleshooting commands:
+          
+          # Check VM status:
+          oc get vmi -n {{ vm_namespace }}
+          
+          # Check DataVolume status:
+          oc get dv -n {{ vm_namespace }}
+          
+          # Check CDI importer pod logs (to debug qcow2 import):
+          oc logs -n {{ vm_namespace }} -l app.kubernetes.io/component=importer
+          
+          # Check PVC status:
+          oc get pvc -n {{ vm_namespace }}
+          
+          # View VM console:
+          oc console -n {{ vm_namespace }} {{ vm_name }}
+          
+          # Check VM events:
+          oc get events -n {{ vm_namespace }} --field-selector involvedObject.name={{ vm_name }}
+          ==========================================
+
+    - name: Verify bootc image import
+      kubernetes.core.k8s_info:
+        api_version: v1
+        kind: Pod
+        namespace: "{{ vm_namespace }}"
+        label_selectors:
+          - "app.kubernetes.io/component=importer"
+      register: importer_pods
+      when: dv.resources[0].status.phase == "Succeeded"
+
+    - name: Show importer pod status if available
+      debug:
+        msg: "Importer pods: {{ importer_pods.resources | map(attribute='metadata.name') | list }}"
+      when: importer_pods.resources | length > 0

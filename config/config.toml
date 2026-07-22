@@ -1,0 +1,38 @@
+[[customizations.user]]
+name = "demo"
+password = "redhat"
+groups = ["wheel"]
+
+[[customizations.filesystem]]
+mountpoint = "/"
+minsize = "30 GiB"
+
+[[customizations.files]]
+path = "/etc/sudoers.d/10-wheel-nopasswd"
+mode = "0440"
+user = "root"
+group = "root"
+data = "%wheel ALL=(ALL) NOPASSWD: ALL"
+
+# Set the Console Keymap
+[[customizations.files]]
+path = "/etc/vconsole.conf"
+mode = "0644"
+user = "root"
+group = "root"
+data = "KEYMAP=mac-dk-latin1"
+
+## Set the X11/Wayland (Desktop) Layout and Variant
+#[[customizations.files]]
+#path = "/etc/X11/xorg.conf.d/00-keyboard.conf"
+#mode = "0644"
+#user = "root"
+#group = "root"
+#data = """
+#Section "InputClass"
+#        Identifier "system-keyboard"
+#        MatchIsKeyboard "on"
+#        Option "XkbLayout" "dk"
+#        Option "XkbVariant" "mac_nodeadkeys"
+#EndSection
+#"""
