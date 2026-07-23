@@ -39,9 +39,9 @@ jobs:
 
       - name: Log in to registry.redhat.io
         run: |
-          echo "${{ secrets.REDHAT_PASSWORD }}" | \
+          echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
             sudo podman login registry.redhat.io \
-              -u "${{ secrets.REDHAT_USERNAME }}" --password-stdin
+              -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
 
       - name: Pull source image
         run: sudo podman pull "$IMAGE"
@@ -76,7 +76,7 @@ jobs:
 
       - name: Log in to quay.io
         run: |
-          echo "${{ secrets.QUAY_PASSWORD }}" | \
+          echo "${{ secrets.QUAY_TOKEN }}" | \
             oras login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
 
       - name: Push qcow2 as OCI artifact
