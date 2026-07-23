@@ -9,8 +9,8 @@ if [[ -f "${SCRIPT_DIR}/demo-env.sh" ]]; then
 fi
 
 IMAGE="${IMAGE:-quay.io/waba/bootc-guide:dev}"
-#PLATFORM="${TARGET_PLATFORM:-linux/amd64,linux/arm64}"
-PLATFORM="${TARGET_PLATFORM:-linux/arm64}"
+PLATFORM="${TARGET_PLATFORM:-linux/amd64,linux/arm64}"
+#PLATFORM="${TARGET_PLATFORM:-linux/arm64}"
 VM_SSH_KEY="${VM_SSH_KEY:-id_ed25519}"  # Default key name
 
 # Login to registry.redhat.io
