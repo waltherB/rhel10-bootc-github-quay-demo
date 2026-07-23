@@ -65,7 +65,7 @@ jobs:
           STORAGE_PATH=$(sudo podman image inspect "$IMAGE" --format '{{.GraphDriver.Data.MergedDir}}' | sed 's/\/merged$//')
           echo "Storage path: $STORAGE_PATH"
           sudo podman run --rm --privileged \
-          --pull=allways \
+          --pull=newer \
           --security-opt label=type:unconfined_t \
           -v /var/lib/containers/storage:/var/lib/containers/storage \
           -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
