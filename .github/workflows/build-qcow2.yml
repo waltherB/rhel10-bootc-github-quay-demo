@@ -14,15 +14,11 @@ on:
 
 jobs:
   build:
-    # ubuntu-latest = ubuntu-24.04, which has a documented overlay
-    # storage-driver quirk with bootc-image-builder (osbuild/bootc-image-builder#446).
-    # We force vfs everywhere below to route around it.
     runs-on: ubuntu-latest
 
     env:
       IMAGE: ${{ github.event.inputs.image }}
       OUTPUT_REF: ${{ github.event.inputs.output_ref }}
-      STORAGE_DRIVER: vfs
 
     steps:
       - name: Checkout
@@ -33,26 +29,37 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
+      # Wipe any storage state the runner image may have pre-seeded
+      # (some runner images ship podman/skopeo preinstalled and may
+      # have already touched these paths), so our steps are the first
+      # to initialize storage - avoids a stale/mismatched database.
+      - name: Reset container storage
+        run: |
+          sudo podman system reset --force || true
+          sudo rm -rf /var/lib/containers/storage /run/containers/storage
+
+      - name: Show podman storage info
+        run: sudo podman info
+
       - name: Log in to registry.redhat.io
         run: |
           echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
-            sudo env STORAGE_DRIVER=vfs podman login registry.redhat.io \
+            sudo podman login registry.redhat.io \
               -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
 
       - name: Pull source image
-        run: sudo env STORAGE_DRIVER=vfs podman pull "$IMAGE"
+        run: sudo podman pull "$IMAGE"
 
       - name: Pull bootc-image-builder
-        run: sudo env STORAGE_DRIVER=vfs podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+        run: sudo podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
 
       - name: Build qcow2
         run: |
           mkdir -p output
-          sudo env STORAGE_DRIVER=vfs podman run --rm --privileged \
-            -e STORAGE_DRIVER=vfs \
+          sudo podman run --rm --privileged \
+            --pull=newer \
             --security-opt label=type:unconfined_t \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
-            -v /run/containers/storage:/run/containers/storage \
             -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
             -v "${{ github.workspace }}/output":/output \
             registry.redhat.io/rhel10/bootc-image-builder:latest \
