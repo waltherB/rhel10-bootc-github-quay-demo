@@ -14,14 +14,15 @@ on:
 
 jobs:
   build:
-    # ubuntu-latest is a native amd64 VM with KVM already enabled -
-    # no Rosetta/QEMU translation, so the earlier libpod_lock/emulation
-    # issue seen on Apple Silicon podman machine builds doesn't apply here.
+    # ubuntu-latest = ubuntu-24.04, which has a documented overlay
+    # storage-driver quirk with bootc-image-builder (osbuild/bootc-image-builder#446).
+    # We force vfs everywhere below to route around it.
     runs-on: ubuntu-latest
 
     env:
       IMAGE: ${{ github.event.inputs.image }}
       OUTPUT_REF: ${{ github.event.inputs.output_ref }}
+      STORAGE_DRIVER: vfs
 
     steps:
       - name: Checkout
@@ -35,36 +36,34 @@ jobs:
       - name: Log in to registry.redhat.io
         run: |
           echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
-            sudo podman login registry.redhat.io \
+            sudo env STORAGE_DRIVER=vfs podman login registry.redhat.io \
               -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
 
-      - name: Get current user/group
-        id: whoami
-        run: echo "id=$(id -u):$(id -g)" >> "$GITHUB_OUTPUT"
+      - name: Pull source image
+        run: sudo env STORAGE_DRIVER=vfs podman pull "$IMAGE"
 
-      # Using the upstream action instead of hand-rolled `podman run` -
-      # it wraps the correct invocation (storage mount, --local handling,
-      # chown, manifest generation) and is what osbuild's own CI runs on
-      # GitHub-hosted runners, avoiding the "no such container" /
-      # storage-driver quirks the raw apt podman + manual mount hit.
+      - name: Pull bootc-image-builder
+        run: sudo env STORAGE_DRIVER=vfs podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+
       - name: Build qcow2
-        id: build-qcow2
-        uses: osbuild/bootc-image-builder-action@v0.0.2
-        with:
-          image: ${{ env.IMAGE }}
-          builder-image: registry.redhat.io/rhel10/bootc-image-builder:latest
-          config-file: ./config/config.toml
-          types: |
-            qcow2
-          chown: ${{ steps.whoami.outputs.id }}
+        run: |
+          mkdir -p output
+          sudo env STORAGE_DRIVER=vfs podman run --rm --privileged \
+            -e STORAGE_DRIVER=vfs \
+            --security-opt label=type:unconfined_t \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
+            -v "${{ github.workspace }}/output":/output \
+            registry.redhat.io/rhel10/bootc-image-builder:latest \
+            --type qcow2 \
+            --config /config.toml \
+            "$IMAGE"
+
+      - name: Fix ownership of build output
+        run: sudo chown -R "$(id -u):$(id -g)" output
 
       - name: Rename output
-        id: rename
-        run: |
-          SRC="${{ steps.build-qcow2.outputs.qcow2-output-path }}"
-          DEST="$(dirname "$SRC")/disk-amd.qcow2"
-          mv "$SRC" "$DEST"
-          echo "path=$DEST" >> "$GITHUB_OUTPUT"
+        run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd.qcow2
 
       - name: Install oras
         run: |
@@ -82,7 +81,7 @@ jobs:
         run: |
           oras push "$OUTPUT_REF" \
             --artifact-type application/vnd.qcow2 \
-            "${{ steps.rename.outputs.path }}:application/x-qemu-disk"
+            output/qcow2/disk-amd.qcow2:application/x-qemu-disk
 
       # Fallback copy so you always have the build output even if the
       # push step needs adjusting later.
@@ -90,5 +89,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: disk-amd-qcow2
-          path: ${{ steps.rename.outputs.path }}
+          path: output/qcow2/disk-amd.qcow2
           retention-days: 7
