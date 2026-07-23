@@ -1,0 +1,92 @@
+name: Build bootc amd64 qcow2
+
+on:
+  workflow_dispatch:
+    inputs:
+      image:
+        description: "Source bootc container image to convert"
+        required: false
+        default: "quay.io/waba/bootc-guide:dev"
+      output_ref:
+        description: "OCI artifact ref to push the qcow2 to"
+        required: false
+        default: "quay.io/waba/bootc-guide-disk:amd64-latest"
+
+jobs:
+  build:
+    # ubuntu-latest is a native amd64 VM with KVM already enabled -
+    # no Rosetta/QEMU translation, so the libpod_lock/emulation issue
+    # seen on Apple Silicon podman machine builds doesn't apply here.
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE: ${{ github.event.inputs.image }}
+      OUTPUT_REF: ${{ github.event.inputs.output_ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      - name: Confirm KVM is available
+        run: |
+          ls -l /dev/kvm
+          sudo usermod -aG kvm "$(whoami)" || true
+
+      - name: Log in to registry.redhat.io
+        run: |
+          echo "${{ secrets.RH_REGISTRY_PASSWORD}}" | \
+            podman login registry.redhat.io \
+              -u "${{ secrets.RH_REGISTRY_USERNAME}}" --password-stdin
+
+      - name: Pull source image
+        run: podman pull "$IMAGE"
+
+      - name: Pull bootc-image-builder
+        run: podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+
+      - name: Build qcow2
+        run: |
+          mkdir -p output
+          podman run --rm --privileged \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
+            -v "${{ github.workspace }}/output":/output \
+            registry.redhat.io/rhel10/bootc-image-builder:latest \
+            --type qcow2 \
+            --config /config.toml \
+            "$IMAGE"
+
+      - name: Rename output
+        run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd.qcow2
+
+      - name: Install oras
+        run: |
+          curl -sSL -o oras.tar.gz \
+            https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
+          tar -xzf oras.tar.gz oras
+          sudo mv oras /usr/local/bin/oras
+
+      - name: Log in to quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN}}" | \
+            oras login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
+
+      - name: Push qcow2 as OCI artifact
+        run: |
+          oras push "$OUTPUT_REF" \
+            --artifact-type application/vnd.qcow2 \
+            output/qcow2/disk-amd.qcow2:application/x-qemu-disk
+
+      # Fallback copy so you always have the build output even if the
+      # push step needs adjusting later.
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: disk-amd-qcow2
+          path: output/qcow2/disk-amd.qcow2
+          retention-days: 7

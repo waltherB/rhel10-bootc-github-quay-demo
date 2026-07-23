@@ -31,6 +31,10 @@ TAG="${IMAGE##*:}"
 DISK_IMAGE="${DISK_IMAGE:-${BASE}:${TAG}-disk}"
 
 QCOW2="${REPO_ROOT}/output/qcow2/disk.qcow2"
+# If the amd64 version exists, use that instead
+if [[ -f "${REPO_ROOT}/output/qcow2/disk-amd.qcow2" ]]; then
+  QCOW2="${REPO_ROOT}/output/qcow2/disk-amd.qcow2"
+fi
 
 echo ""
 echo "  SOURCE qcow2 : ${QCOW2}"
