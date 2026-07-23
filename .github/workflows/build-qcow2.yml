@@ -29,10 +29,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
-      # Wipe any storage state the runner image may have pre-seeded
-      # (some runner images ship podman/skopeo preinstalled and may
-      # have already touched these paths), so our steps are the first
-      # to initialize storage - avoids a stale/mismatched database.
       - name: Reset container storage
         run: |
           sudo podman system reset --force || true
@@ -47,17 +43,16 @@ jobs:
             sudo podman login registry.redhat.io \
               -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
 
-      - name: Pull source image
-        run: sudo podman pull "$IMAGE"
-
-      - name: Pull bootc-image-builder
-        run: sudo podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+      - name: Log in to quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | \
+            sudo podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
 
       - name: Build qcow2
         run: |
           mkdir -p output
           sudo podman run --rm --privileged \
-            --pull=newer \
+            --pull=always \
             --security-opt label=type:unconfined_t \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
@@ -80,7 +75,7 @@ jobs:
           tar -xzf oras.tar.gz oras
           sudo mv oras /usr/local/bin/oras
 
-      - name: Log in to quay.io
+      - name: Log in to quay.io for oras
         run: |
           echo "${{ secrets.QUAY_TOKEN }}" | \
             oras login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
@@ -91,8 +86,6 @@ jobs:
             --artifact-type application/vnd.qcow2 \
             output/qcow2/disk-amd.qcow2:application/x-qemu-disk
 
-      # Fallback copy so you always have the build output even if the
-      # push step needs adjusting later.
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
