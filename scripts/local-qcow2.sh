@@ -35,7 +35,8 @@ podman run --rm --privileged \
   -v /var/lib/containers/storage:/var/lib/containers/storage \
   -v ./config/config.toml:/config.toml:ro \
   -v ./output:/output \
-  registry.redhat.io/rhel10/bootc-image-builder:latest \
+  --entrypoint bash \
+  registry.redhat.io/rhel10/bootc-image-builder:latest -c "mount -t devtmpfs devtmpfs /dev && mount -t tmpfs tmpfs /dev/shm && podman ps"\
   --type qcow2 \
   --config /config.toml \
   "$IMAGE"
