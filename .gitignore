@@ -8,3 +8,4 @@ pull-secret.json
 *.log
 output/manifest-qcow2.json
 output/manifest-qcow2.json
+.github/workflows/build-qcow2.yml
