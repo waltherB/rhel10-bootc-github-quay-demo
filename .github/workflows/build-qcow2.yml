@@ -61,20 +61,19 @@ jobs:
       - name: Build qcow2
         run: |
           mkdir -p output
-          # Get the full image name as it appears in local storage
-          LOCAL_IMAGE=$(sudo podman images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${IMAGE//\//\\/}" | head -1)
-          echo "Using local image: $LOCAL_IMAGE"
-          
+          # Get the storage path
+          STORAGE_PATH=$(sudo podman image inspect "$IMAGE" --format '{{.GraphDriver.Data.MergedDir}}' | sed 's/\/merged$//')
+          echo "Storage path: $STORAGE_PATH"
           sudo podman run --rm --privileged \
-            --pull=never \
-            --security-opt label=type:unconfined_t \
-            -v /var/lib/containers/storage:/var/lib/containers/storage \
-            -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
-            -v "${{ github.workspace }}/output":/output \
-            registry.redhat.io/rhel10/bootc-image-builder:latest \
-            --type qcow2 \
-            --config /config.toml \
-            "$LOCAL_IMAGE"
+          --pull=never \
+          --security-opt label=type:unconfined_t \
+          -v /var/lib/containers/storage:/var/lib/containers/storage \
+          -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
+          -v "${{ github.workspace }}/output":/output \
+           registry.redhat.io/rhel10/bootc-image-builder:latest \
+          --type qcow2 \
+          --config /config.toml \
+          "$IMAGE"
 
       - name: Fix ownership of build output
         run: sudo chown -R "$(id -u):$(id -g)" output
