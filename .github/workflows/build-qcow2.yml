@@ -29,6 +29,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y podman
 
+      # Wipe any storage state the runner image may have pre-seeded
       - name: Reset container storage
         run: |
           sudo podman system reset --force || true
@@ -48,11 +49,24 @@ jobs:
           echo "${{ secrets.QUAY_TOKEN }}" | \
             sudo podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
 
+      - name: Pull source image
+        run: sudo podman pull "$IMAGE"
+
+      - name: Pull bootc-image-builder
+        run: sudo podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+
+      - name: Verify images are present
+        run: sudo podman images
+
       - name: Build qcow2
         run: |
           mkdir -p output
+          # Get the full image name as it appears in local storage
+          LOCAL_IMAGE=$(sudo podman images --format "{{.Repository}}:{{.Tag}}" | grep -E "^${IMAGE//\//\\/}" | head -1)
+          echo "Using local image: $LOCAL_IMAGE"
+          
           sudo podman run --rm --privileged \
-            --pull=always \
+            --pull=never \
             --security-opt label=type:unconfined_t \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
@@ -60,7 +74,7 @@ jobs:
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --config /config.toml \
-            "$IMAGE"
+            "$LOCAL_IMAGE"
 
       - name: Fix ownership of build output
         run: sudo chown -R "$(id -u):$(id -g)" output
@@ -86,6 +100,8 @@ jobs:
             --artifact-type application/vnd.qcow2 \
             output/qcow2/disk-amd.qcow2:application/x-qemu-disk
 
+      # Fallback copy so you always have the build output even if the
+      # push step needs adjusting later.
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
