@@ -39,20 +39,20 @@ jobs:
 
       - name: Log in to registry.redhat.io
         run: |
-          echo "${{ secrets.RH_REGISTRY_PASSWORD}}" | \
-            podman login registry.redhat.io \
-              -u "${{ secrets.RH_REGISTRY_USERNAME}}" --password-stdin
+          echo "${{ secrets.REDHAT_PASSWORD }}" | \
+            sudo podman login registry.redhat.io \
+              -u "${{ secrets.REDHAT_USERNAME }}" --password-stdin
 
       - name: Pull source image
-        run: podman pull "$IMAGE"
+        run: sudo podman pull "$IMAGE"
 
       - name: Pull bootc-image-builder
-        run: podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+        run: sudo podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
 
       - name: Build qcow2
         run: |
           mkdir -p output
-          podman run --rm --privileged \
+          sudo podman run --rm --privileged \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
             -v "${{ github.workspace }}/output":/output \
@@ -60,6 +60,9 @@ jobs:
             --type qcow2 \
             --config /config.toml \
             "$IMAGE"
+
+      - name: Fix ownership of build output
+        run: sudo chown -R "$(id -u):$(id -g)" output
 
       - name: Rename output
         run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd.qcow2
@@ -73,7 +76,7 @@ jobs:
 
       - name: Log in to quay.io
         run: |
-          echo "${{ secrets.QUAY_TOKEN}}" | \
+          echo "${{ secrets.QUAY_PASSWORD }}" | \
             oras login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
 
       - name: Push qcow2 as OCI artifact
