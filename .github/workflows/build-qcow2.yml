@@ -97,24 +97,6 @@ jobs:
             --config /config.toml \
             "${{ env.IMAGE }}"
 
-#      - name: Build qcow2
-#        run: |
-#          mkdir -p output
-#          # $IMAGE was already pulled into local podman storage above, so we
-#          # pass --local and reuse that same storage dir inside the container
-#          # instead of having bootc-image-builder re-pull from the registry.
-#          sudo podman run --rm --privileged \
-#          --pull=newer \
-#          --security-opt label=type:unconfined_t \
-#          #-v /var/lib/containers/storage:/var/lib/containers/storage \
-#          -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
-#          -v "${{ github.workspace }}/output":/output \
-#          registry.redhat.io/rhel10/bootc-image-builder:latest \
-#          --type qcow2 \
-#          --local \
-#          --config /config.toml \
-#          "$IMAGE"
-#
       - name: Fix ownership of build output
         run: sudo chown -R "$(id -u):$(id -g)" output
 
@@ -123,9 +105,6 @@ jobs:
 
       - name: Build containerDisk image
         run: |
-          # KubeVirt containerDisk format: FROM scratch, disk at /disk/disk.qcow2.
-          # CDI's pullMethod:node importer knows how to extract this — it does
-          # NOT understand a bare OCI artifact blob (e.g. from oras push).
           mkdir -p ctxdir
           cp output/qcow2/disk-amd.qcow2 ctxdir/
           cat > ctxdir/Containerfile <<'EOF'
@@ -142,12 +121,9 @@ jobs:
       - name: Push containerDisk image to Quay
         run: sudo podman push "$OUTPUT_REF"
 
-      # Fallback copy so you always have the build output even if the
-      # push step needs adjusting later.
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
           name: disk-amd-qcow2
           path: output/qcow2/disk-amd.qcow2
           retention-days: 7
-
