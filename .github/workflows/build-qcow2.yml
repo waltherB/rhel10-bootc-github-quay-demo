@@ -7,10 +7,10 @@ on:
         description: "Source bootc container image to convert"
         required: false
         default: "quay.io/waba/bootc-guide:dev"
-      output_ref:
-        description: "containerDisk image ref to push (blank = derive from image, e.g. quay.io/waba/bootc-guide:dev-disk)"
+      target_platform:
+        description: "Target architecture (e.g. linux/amd64 or linux/arm64)"
         required: false
-        default: ""
+        default: "linux/amd64"
 
 jobs:
   build:
@@ -19,6 +19,7 @@ jobs:
     env:
       IMAGE: ${{ github.event.inputs.image }}
       OUTPUT_REF: ${{ github.event.inputs.output_ref }}
+      TARGET_PLATFORM: ${{ github.event.inputs.target_platform || 'linux/amd64' }}
 
     steps:
       - name: Checkout
@@ -87,22 +88,33 @@ jobs:
 
       - name: Build qcow2
         run: |
-          mkdir -p output
-          # $IMAGE was already pulled into local podman storage above, so we
-          # pass --local and reuse that same storage dir inside the container
-          # instead of having bootc-image-builder re-pull from the registry.
-          sudo podman run --rm --privileged \
-          --pull=newer \
-          --security-opt label=type:unconfined_t \
-          #-v /var/lib/containers/storage:/var/lib/containers/storage \
-          -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
-          -v "${{ github.workspace }}/output":/output \
-          registry.redhat.io/rhel10/bootc-image-builder:latest \
-          --type qcow2 \
-          --local \
-          --config /config.toml \
-          "$IMAGE"
+          podman run --rm --privileged \
+            --platform "${{ env.TARGET_PLATFORM }}" \
+            -v ./config/config.toml:/config.toml:ro \
+            -v ./output:/output \
+            registry.redhat.io/rhel10/bootc-image-builder:latest \
+            --type qcow2 \
+            --config /config.toml \
+            "${{ env.IMAGE }}"
 
+#      - name: Build qcow2
+#        run: |
+#          mkdir -p output
+#          # $IMAGE was already pulled into local podman storage above, so we
+#          # pass --local and reuse that same storage dir inside the container
+#          # instead of having bootc-image-builder re-pull from the registry.
+#          sudo podman run --rm --privileged \
+#          --pull=newer \
+#          --security-opt label=type:unconfined_t \
+#          #-v /var/lib/containers/storage:/var/lib/containers/storage \
+#          -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
+#          -v "${{ github.workspace }}/output":/output \
+#          registry.redhat.io/rhel10/bootc-image-builder:latest \
+#          --type qcow2 \
+#          --local \
+#          --config /config.toml \
+#          "$IMAGE"
+#
       - name: Fix ownership of build output
         run: sudo chown -R "$(id -u):$(id -g)" output
 
