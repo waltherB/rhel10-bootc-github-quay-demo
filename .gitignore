@@ -1,11 +1,9 @@
 output/manifest-qcow2.json
-output/manifest-qcow2.json
 output/qcow2/disk.qcow2
+output/qcow2/disk-amd.qcow2
 .DS_Store
 scripts/demo-env.sh
 actions-runner/
 pull-secret.json
 *.log
-output/manifest-qcow2.json
-output/manifest-qcow2.json
 .github/workflows/build-qcow2.yml
