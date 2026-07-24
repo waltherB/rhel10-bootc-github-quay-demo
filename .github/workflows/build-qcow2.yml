@@ -8,9 +8,9 @@ on:
         required: false
         default: "quay.io/waba/bootc-guide:dev"
       output_ref:
-        description: "OCI artifact ref to push the qcow2 to"
+        description: "containerDisk image ref to push (blank = derive from image, e.g. quay.io/waba/bootc-guide:dev-disk)"
         required: false
-        default: "quay.io/waba/bootc-guide-disk:amd64-latest"
+        default: ""
 
 jobs:
   build:
@@ -23,6 +23,18 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Resolve output ref
+        run: |
+          if [[ -n "$OUTPUT_REF" ]]; then
+            RESOLVED="$OUTPUT_REF"
+          else
+            BASE="${IMAGE%:*}"
+            TAG="${IMAGE##*:}"
+            RESOLVED="${BASE}:${TAG}-disk"
+          fi
+          echo "Resolved output ref: $RESOLVED"
+          echo "OUTPUT_REF=$RESOLVED" >> "$GITHUB_ENV"
 
       - name: Install podman
         run: |
@@ -61,18 +73,18 @@ jobs:
       - name: Build qcow2
         run: |
           mkdir -p output
-          # Get the storage path
-          STORAGE_PATH=$(sudo podman image inspect "$IMAGE" --format '{{.GraphDriver.Data.MergedDir}}' | sed 's/\/merged$//')
-          echo "Storage path: $STORAGE_PATH"
+          # $IMAGE was already pulled into local podman storage above, so we
+          # pass --local and reuse that same storage dir inside the container
+          # instead of having bootc-image-builder re-pull from the registry.
           sudo podman run --rm --privileged \
           --pull=newer \
           --security-opt label=type:unconfined_t \
           -v /var/lib/containers/storage:/var/lib/containers/storage \
           -v "${{ github.workspace }}/config/config.toml":/config.toml:ro \
           -v "${{ github.workspace }}/output":/output \
-          --entrypoint bash \
-          registry.redhat.io/rhel10/bootc-image-builder:latest -c "mount -t devtmpfs devtmpfs /dev && mount -t tmpfs tmpfs /dev/shm && podman ps" \ 
+          registry.redhat.io/rhel10/bootc-image-builder:latest \
           --type qcow2 \
+          --local \
           --config /config.toml \
           "$IMAGE"
 
@@ -82,23 +94,26 @@ jobs:
       - name: Rename output
         run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd.qcow2
 
-      - name: Install oras
+      - name: Build containerDisk image
         run: |
-          curl -sSL -o oras.tar.gz \
-            https://github.com/oras-project/oras/releases/download/v1.2.0/oras_1.2.0_linux_amd64.tar.gz
-          tar -xzf oras.tar.gz oras
-          sudo mv oras /usr/local/bin/oras
+          # KubeVirt containerDisk format: FROM scratch, disk at /disk/disk.qcow2.
+          # CDI's pullMethod:node importer knows how to extract this — it does
+          # NOT understand a bare OCI artifact blob (e.g. from oras push).
+          mkdir -p ctxdir
+          cp output/qcow2/disk-amd.qcow2 ctxdir/
+          cat > ctxdir/Containerfile <<'EOF'
+          FROM scratch
+          COPY disk-amd.qcow2 /disk/disk.qcow2
+          EOF
+          sudo podman build \
+            --platform linux/amd64 \
+            --no-cache \
+            -f ctxdir/Containerfile \
+            -t "$OUTPUT_REF" \
+            ctxdir
 
-      - name: Log in to quay.io for oras
-        run: |
-          echo "${{ secrets.QUAY_TOKEN }}" | \
-            oras login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
-
-      - name: Push qcow2 as OCI artifact
-        run: |
-          oras push "$OUTPUT_REF" \
-            --artifact-type application/vnd.qcow2 \
-            output/qcow2/disk-amd.qcow2:application/x-qemu-disk
+      - name: Push containerDisk image to Quay
+        run: sudo podman push "$OUTPUT_REF"
 
       # Fallback copy so you always have the build output even if the
       # push step needs adjusting later.

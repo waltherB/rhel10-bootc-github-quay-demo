@@ -345,10 +345,15 @@ if should_run "2"; then
   narrate "PLATFORM defaults to linux/arm64 – no cross-compilation needed"
   echo ""
 
-  #export TARGET_PLATFORM="linux/arm64"
-  note "IMAGE=${IMAGE}  TARGET_PLATFORM=${TARGET_PLATFORM}"
+  # Step 2 always builds natively for arm64 on this Mac — this is a
+  # separate concern from the qcow2 disk build (now done in GitHub Actions,
+  # see Step 4), which targets amd64 for the x86_64 KubeVirt cluster.
+  # Deliberately NOT reusing a shared TARGET_PLATFORM: mixing the two up is
+  # exactly what caused a mislabeled arm64 disk to reach OpenShift before.
+  LOCAL_BUILD_PLATFORM="linux/arm64"
+  note "IMAGE=${IMAGE}  TARGET_PLATFORM=${LOCAL_BUILD_PLATFORM}"
   pause "Press ENTER to start local build..."
-  run ./scripts/local-build.sh
+  run "TARGET_PLATFORM=${LOCAL_BUILD_PLATFORM} ./scripts/local-build.sh"
   pause
 fi
 
@@ -380,21 +385,30 @@ if should_run "4"; then
   fi
   run git push
 
-  narrate "Starting containerDisk conversion (:dev-disk) in the BACKGROUND"
+  narrate "Starting containerDisk conversion (:dev-disk) via GitHub Actions in the BACKGROUND"
+  note "This runs on a native amd64 GitHub-hosted runner — no local cross-arch build,"
+  note "so there's no risk of accidentally shipping an arm64 disk to the x86_64 cluster."
   note "This runs silently in the background so we can proceed to Step 5 immediately."
-  
+
   _DEV_BASE="${IMAGE%:*}"
   _DEV_TAG="${IMAGE##*:}"
   export DEV_DISK_IMAGE="${_DEV_BASE}:${_DEV_TAG}-disk"
-  
-  # Run both local-qcow2 and local-push-disk sequentially in the background
+
   (
-    echo "=== ContainerDisk Build Started at $(date) ===" > disk-build.log
-    if IMAGE="${IMAGE}" ./scripts/local-qcow2.sh >> disk-build.log 2>&1 && \
-       IMAGE="${IMAGE}" DISK_IMAGE="${DEV_DISK_IMAGE}" ./scripts/local-push-disk.sh >> disk-build.log 2>&1; then
-      echo "=== ContainerDisk Build and Push COMPLETED Successfully at $(date) ===" >> disk-build.log
+    echo "=== ContainerDisk Build (GitHub Actions) Started at $(date) ===" > disk-build.log
+    if gh workflow run build-qcow2.yml \
+         --field image="${IMAGE}" \
+         --field output_ref="${DEV_DISK_IMAGE}" >> disk-build.log 2>&1; then
+      sleep 8
+      RUN_ID="$(gh run list --workflow=build-qcow2.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
+      echo "Watching GitHub Actions run ${RUN_ID}..." >> disk-build.log
+      if gh run watch "${RUN_ID}" --exit-status >> disk-build.log 2>&1; then
+        echo "=== ContainerDisk Build and Push COMPLETED Successfully at $(date) ===" >> disk-build.log
+      else
+        echo "=== ContainerDisk Build FAILED at $(date). Check: gh run view ${RUN_ID} --log ===" >> disk-build.log
+      fi
     else
-      echo "=== ContainerDisk Build FAILED at $(date). Check disk-build.log ===" >> disk-build.log
+      echo "=== Failed to dispatch build-qcow2.yml at $(date) ===" >> disk-build.log
     fi
   ) &
   
@@ -429,6 +443,9 @@ if should_run "5"; then
   narrate "Only git tags (v*) create a versioned tag – no dev-SHA clutter in Quay"
   manual "Open GitHub → Actions → build-sign-push-rhel10-bootc and show the running workflow"
   manual "Point out: build job, smoke test, Quay push, Cosign sign, Cosign verify"
+  note "The qcow2 disk conversion kicked off in Step 4 (build-qcow2.yml) is running"
+  note "in parallel on a separate native-amd64 runner — check disk-build.log or the"
+  note "iTerm tail window for its progress."
   pause "Press ENTER once the workflow is green..."
 fi
 

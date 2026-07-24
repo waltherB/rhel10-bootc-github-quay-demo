@@ -1,8 +1,17 @@
- #!/usr/bin/env bash
+#!/usr/bin/env bash
 set -euo pipefail
 IMAGE="${IMAGE:-quay.io/waba/bootc-guide:dev}"
 # Default to amd64 for cross-architecture builds from arm64 Mac
 TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
+
+# The KubeVirt/SNO target is x86_64 only. Building anything else here would
+# silently produce a disk that boots nowhere useful (and won't get renamed
+# to disk-amd.qcow2 below, masking the mistake). Refuse instead of guessing.
+if [[ "$TARGET_PLATFORM" != "linux/amd64" ]]; then
+  echo "❌ TARGET_PLATFORM=$TARGET_PLATFORM, but this demo's VM/KubeVirt target is amd64 only." >&2
+  echo "   Unset TARGET_PLATFORM (or set it to linux/amd64) and re-run." >&2
+  exit 1
+fi
 
 # Determine output filename based on architecture
 if [[ "$TARGET_PLATFORM" == "linux/amd64" ]]; then
@@ -35,9 +44,9 @@ podman run --rm --privileged \
   -v /var/lib/containers/storage:/var/lib/containers/storage \
   -v ./config/config.toml:/config.toml:ro \
   -v ./output:/output \
-  --entrypoint bash \
-  registry.redhat.io/rhel10/bootc-image-builder:latest -c "mount -t devtmpfs devtmpfs /dev && mount -t tmpfs tmpfs /dev/shm && podman ps"\
+  registry.redhat.io/rhel10/bootc-image-builder:latest \
   --type qcow2 \
+  --local \
   --config /config.toml \
   "$IMAGE"
 
