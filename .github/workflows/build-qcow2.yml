@@ -47,6 +47,21 @@ jobs:
           sudo podman system reset --force || true
           sudo rm -rf /var/lib/containers/storage /run/containers/storage
 
+      # Known Ubuntu GitHub Actions runner quirk (upstream-documented, see
+      # https://github.com/osbuild/bootc-image-builder/issues/446): if the
+      # storage driver isn't pinned explicitly BEFORE the first pull, the
+      # storage DB ends up with an empty/ambiguous graph driver. When
+      # bootc-image-builder's internal podman later reads that same shared
+      # storage and defaults to "overlay", it hits a driver mismatch — which
+      # surfaces downstream as a confusing "no such container" / exit 125
+      # error during manifest generation, not as an explicit driver-mismatch
+      # message. Pinning it here up front avoids that entirely.
+      - name: Pin container storage driver
+        run: |
+          sudo mkdir -p /etc/containers
+          printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' | \
+            sudo tee /etc/containers/storage.conf
+
       - name: Show podman storage info
         run: sudo podman info
 
@@ -123,3 +138,4 @@ jobs:
           name: disk-amd-qcow2
           path: output/qcow2/disk-amd.qcow2
           retention-days: 7
+
