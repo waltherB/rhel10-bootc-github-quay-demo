@@ -3,6 +3,11 @@ name: Build bootc amd64 qcow2
 on:
   workflow_dispatch:
     inputs:
+      output_ref:
+        description: 'Git ref to use for the output image'
+        required: false
+        default: 'main'
+        type: string
       image:
         description: "Source bootc container image to convert"
         required: false
