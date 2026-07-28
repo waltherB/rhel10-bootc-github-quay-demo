@@ -231,10 +231,15 @@
                   # bootc/RHEL 10 images are GPT/EFI-only; without this KubeVirt
                   # defaults to SeaBIOS, which cannot boot a GPT disk and hangs
                   # forever at "Booting from Hard Disk...".
+                  machine:
+                    type: pc-q35-rhel9.4.0  # Ensures AMD64 architecture
+                  features:
+                    acpi: {}
+                    smm:
+                      enabled: true         # Required for UEFI
                   firmware:
                     bootloader:
-                      efi:
-                        secureBoot: false
+                      efi: {}               # Enables UEFI, not BIOS
                   cpu:
                     cores: "{{ vm_cores }}"
                   memory:
