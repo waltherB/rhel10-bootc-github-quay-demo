@@ -68,6 +68,13 @@ jobs:
           printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' | \
             sudo tee /etc/containers/storage.conf
 
+      # === FIX: Create writable runtime directory for Podman ===
+      - name: Setup Podman runtime directory
+        run: |
+          export XDG_RUNTIME_DIR=/tmp/podman-runtime
+          mkdir -p $XDG_RUNTIME_DIR
+          echo "XDG_RUNTIME_DIR=/tmp/podman-runtime" >> $GITHUB_ENV
+
       - name: Show podman storage info
         run: sudo podman info
 
@@ -97,6 +104,7 @@ jobs:
             --platform "${{ env.TARGET_PLATFORM }}" \
             -v ./config/config.toml:/config.toml:ro \
             -v ./output:/output \
+            -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --config /config.toml \
@@ -121,6 +129,7 @@ jobs:
             --no-cache \
             -f ctxdir/Containerfile \
             -t "$OUTPUT_REF" \
+            -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             ctxdir
 
       - name: Push containerDisk image to Quay
