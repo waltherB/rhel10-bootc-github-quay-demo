@@ -42,6 +42,14 @@ jobs:
           echo "Resolved output ref: $RESOLVED"
           echo "OUTPUT_REF=$RESOLVED" >> "$GITHUB_ENV"
 
+      - name: Verify Red Hat Registry Login
+        run: |
+          echo "Testing login to registry.redhat.io..."
+          sudo podman login registry.redhat.io \
+          -u "${{ secrets.RH_REGISTRY_USERNAME }}" \
+          -p "${{ secrets.RH_REGISTRY_PASSWORD }}" \
+          --log-level=debug    
+
       - name: Install podman
         run: |
           sudo apt-get update
