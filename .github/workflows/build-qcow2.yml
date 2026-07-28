@@ -123,7 +123,7 @@ jobs:
 
       - name: Build qcow2
         run: |
-          podman run --rm --privileged \
+          sudo podman run --rm --privileged \
             --platform "${{ env.TARGET_PLATFORM }}" \
             -v ./config/config.toml:/config.toml:ro \
             -v ./output:/output \
