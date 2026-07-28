@@ -135,7 +135,7 @@ jobs:
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --config /config.toml \
-            containers-storage:${{ env.IMAGE }}
+            "{{ env.IMAGE }}"
 
       - name: Fix ownership of build output
         run: sudo chown -R "$(id -u):$(id -g)" output
