@@ -113,7 +113,7 @@ jobs:
             sudo podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
 
       - name: Pull source image
-        run: sudo podman pull "$IMAGE"
+        run: sudo podman pull {{ env.IMAGE }}
 
       - name: Pull bootc-image-builder
         run: sudo podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
