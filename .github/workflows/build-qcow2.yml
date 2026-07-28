@@ -42,13 +42,28 @@ jobs:
           echo "Resolved output ref: $RESOLVED"
           echo "OUTPUT_REF=$RESOLVED" >> "$GITHUB_ENV"
 
-      - name: Verify Red Hat Registry Login
+      - name: Log in to registry.redhat.io
         run: |
-          echo "Testing login to registry.redhat.io..."
+          # Check if secrets are set
+          if [ -z "${{ secrets.RH_REGISTRY_USERNAME }}" ] || [ -z "${{ secrets.RH_REGISTRY_PASSWORD }}" ]; then
+            echo "❌ ERROR: RH_REGISTRY_USERNAME or RH_REGISTRY_PASSWORD secrets are not set!"
+            echo "Please add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+          exit 1
+          fi
+    
+          echo "Logging in to registry.redhat.io..."
+          echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
           sudo podman login registry.redhat.io \
           -u "${{ secrets.RH_REGISTRY_USERNAME }}" \
-          -p "${{ secrets.RH_REGISTRY_PASSWORD }}" \
-          --log-level=debug    
+          --password-stdin
+    
+          # Verify login succeeded
+          if [ $? -eq 0 ]; then
+            echo "✅ Successfully logged in to registry.redhat.io"
+          else
+            echo "❌ Login failed! Please check your credentials."
+            exit 1
+          fi 
 
       - name: Install podman
         run: |
