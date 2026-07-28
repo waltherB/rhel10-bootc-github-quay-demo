@@ -128,10 +128,12 @@ jobs:
             --platform "${{ env.TARGET_PLATFORM }}" \
             -v ./config/config.toml:/config.toml:ro \
             -v ./output:/output \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
             -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --config /config.toml \
+            --local \
             "${{ env.IMAGE }}"
 
       - name: Fix ownership of build output
