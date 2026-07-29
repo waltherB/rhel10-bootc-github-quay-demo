@@ -439,8 +439,36 @@ if should_run "4"; then
   if ! git diff-index --quiet HEAD --; then
     note "Local changes detected. Committing and pushing..."
     run git commit -a -m "\"chore: push presentation progress to trigger CI\""
-  fi
-  run git push
+    run git push
+  else
+    note "No local changes detected."
+    
+    # Check if we have commits that haven't been pushed
+    LOCAL_COMMITS=$(git log origin/main..HEAD 2>/dev/null)
+    if [ -n "$LOCAL_COMMITS" ]; then
+        note "Local commits exist. Pushing..."
+        run git push
+    else
+        note "No new commits to push. Making a change to files/motd to trigger CI..."
+              
+        # Update the motd with timestamp
+        MOTD_VERSION="v1-$(date +%F-%H%M%S)"
+        echo "RHEL 10 Image Mode Demo ${MOTD_VERSION}" > files/motd
+        
+        note "Updated files/motd to: ${MOTD_VERSION}"
+        run cat files/motd
+        
+        # Check if git is initialized and has a remote
+        if ! git remote -v | grep -q origin; then
+            note "No git remote configured. Skipping commit/push."
+        else
+            # Stage and commit the change
+            run git add files/motd
+            run git commit -m "\"chore: bump motd to ${MOTD_VERSION} to trigger CI\""
+            run git push
+        fi
+    fi
+fi
 
   narrate "Starting AMD64 containerDisk conversion (:dev-disk-amd64) via GitHub Actions in the BACKGROUND"
   note "This runs on a native amd64 GitHub-hosted runner against IMAGE_AMD — no cross-arch"
