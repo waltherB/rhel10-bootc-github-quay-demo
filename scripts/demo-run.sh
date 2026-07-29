@@ -198,6 +198,11 @@ narrate() {
   echo -e "${YELLOW}  ▶  $*${RESET}"
 }
 
+# Print ASCII Flow Diagram in Cyan
+ascii() {
+  echo -e "${CYAN}$*${RESET}"
+}
+
 # Print and run a command
 run() {
   local cmd="$*"
@@ -356,6 +361,11 @@ fi
 step "2" "Local build on Mac M4"
 # ────────────────────────────────────────────────────────────
 if should_run "2"; then
+  ascii "  ┌──────────────┐   podman build (arm64)   ┌─────────────────────┐"
+  ascii "  │ Containerfile│ ───────────────────────► │ Local Container OS  │"
+  ascii "  └──────────────┘                          │ (:dev-arm64)        │"
+  ascii "                                            └─────────────────────┘"
+  echo ""
   narrate "Build the bootc image locally for arm64 (native on M4)"
   narrate "TARGET_PLATFORM_LOCAL is linux/arm64 – no cross-compilation, no emulation"
   echo ""
@@ -375,6 +385,11 @@ fi
 step "2b" "Build ARM64 qcow2 disk image locally (for UTM VM)"
 # ────────────────────────────────────────────────────────────
 if should_run "2b"; then
+  ascii "  ┌────────────────────┐  bootc-image-builder   ┌─────────────────┐"
+  ascii "  │ Local Container OS │ ─────────────────────► │ disk.qcow2      │"
+  ascii "  │ (:dev-arm64)       │      (arm64)           │ (for UTM VM)    │"
+  ascii "  └────────────────────┘                        └─────────────────┘"
+  echo ""
   narrate "bootc-image-builder runs natively arm64-on-arm64 here — no emulation"
   narrate "This qcow2 is only ever used to (re)provision the local UTM VM,"
   narrate "never OpenShift — that always gets the amd64 disk from GitHub Actions"
@@ -388,6 +403,11 @@ fi
 step "3" "Smoke test the image as a container"
 # ────────────────────────────────────────────────────────────
 if should_run "3"; then
+  ascii "  ┌────────────────────┐   podman run --rm -p   ┌─────────────────┐"
+  ascii "  │ Local Container OS │ ─────────────────────► │ Smoke Test     │"
+  ascii "  │ (:dev-arm64)       │                        │ (HTTP / MOTD)   │"
+  ascii "  └────────────────────┘                        └─────────────────┘"
+  echo ""
   narrate "Run the image as a plain container first – fast feedback before touching a VM"
   narrate "Check the web page and the motd are baked in"
   pause "Press ENTER to run smoke test..."
@@ -399,6 +419,15 @@ fi
 step "4" "Push and sign the image"
 # ────────────────────────────────────────────────────────────
 if should_run "4"; then
+  ascii "  ┌────────────────────┐   podman push / cosign   ┌────────────────┐"
+  ascii "  │ Local Container OS │ ───────────────────────► │ Quay Registry  │"
+  ascii "  └────────────────────┘                          │ (:dev-arm64)   │"
+  ascii "                                                  └────────────────┘"
+  ascii "  ┌────────────────────┐   git push / dispatch    ┌────────────────┐"
+  ascii "  │ Git Source Commit  │ ───────────────────────► │ GitHub Actions │"
+  ascii "  └────────────────────┘                          │ (AMD64 Build)  │"
+  ascii "                                                  └────────────────┘"
+  echo ""
   narrate "Push :dev-arm64 to Quay.io (local ARM64 image, for the UTM VM)"
   narrate "Sign with keyless Cosign (OIDC – no long-lived key material)"
   pause "Press ENTER to push and sign..."
@@ -467,6 +496,11 @@ fi
 step "5" "GitHub Actions CI pipeline"
 # ────────────────────────────────────────────────────────────
 if should_run "5"; then
+  ascii "  ┌──────────────────┐   Build / Sign / Push   ┌──────────────────┐"
+  ascii "  │ GitHub Runner    │ ──────────────────────► │ Quay Registry    │"
+  ascii "  │ (ubuntu-latest)  │   (native amd64)        │ (:dev-amd64)     │"
+  ascii "  └──────────────────┘                         └──────────────────┘"
+  echo ""
   narrate "Every push to main triggers: build → smoke test → push :dev → sign → verify"
   narrate "Only git tags (v*) create a versioned tag – no dev-SHA clutter in Quay"
   manual "Open GitHub → Actions → build-sign-push-rhel10-bootc and show the running workflow"
@@ -481,6 +515,10 @@ fi
 step "6" "Promote :dev → :prod"
 # ────────────────────────────────────────────────────────────
 if should_run "6"; then
+  ascii "  ┌──────────────────┐       skopeo copy       ┌──────────────────┐"
+  ascii "  │ Quay: :dev-amd64 │ ──────────────────────► │ Quay: :prod-amd64│"
+  ascii "  └──────────────────┘    (Same SHA digest)    └──────────────────┘"
+  echo ""
   narrate "The promote workflow uses skopeo copy – same digest, just a new tag"
   narrate "No rebuild – what was tested is exactly what goes to prod"
   manual "Open GitHub → Actions → promote-rhel10-bootc-prod → Run workflow (source_tag: dev)"
@@ -491,6 +529,11 @@ fi
 step "7a" "Make a visible change to trigger a live update demo"
 # ────────────────────────────────────────────────────────────
 if should_run "7a"; then
+  ascii "  ┌──────────────────┐    git commit & push    ┌──────────────────┐"
+  ascii "  │ Update files/motd│ ──────────────────────► │ GitHub Actions   │"
+  ascii "  │ (Version bump)   │                         │ (Rebuild & Push) │"
+  ascii "  └──────────────────┘                         └──────────────────┘"
+  echo ""
   narrate "Change the motd so the update is obvious on the VM after reboot"
   pause "Press ENTER to write the new motd and push..."
   MOTD_VERSION="v2-$(date +%F-%H%M)"
@@ -510,6 +553,11 @@ fi
 step "7b" "Check current VM state (before update)"
 # ────────────────────────────────────────────────────────────
 if should_run "7b"; then
+  ascii "  ┌──────────────────┐     ssh vm-status       ┌──────────────────┐"
+  ascii "  │ Local Workstation│ ──────────────────────► │ UTM Virtual Machine│"
+  ascii "  └──────────────────┘                         │ (Captures Digest)│"
+  ascii "                                               └──────────────────┘"
+  echo ""
   narrate "SSH into the UTM VM and capture the current booted digest"
   narrate "vm-status is baked into the image – available everywhere this OS runs"
   note "Connecting to ${VM_SSH}"
@@ -522,6 +570,11 @@ fi
 step "7c" "Pull and apply the update on the VM"
 # ────────────────────────────────────────────────────────────
 if should_run "7c"; then
+  ascii "  ┌──────────────────┐    ssh vm-upgrade       ┌──────────────────┐"
+  ascii "  │ Quay Registry    │ ◄────────────────────── │ UTM Virtual Machine│"
+  ascii "  │ (:prod-arm64)    │   (bootc upgrade)       │ (Staged & Reboot)│"
+  ascii "  └──────────────────┘                         └──────────────────┘"
+  echo ""
   narrate "bootc upgrade pulls the new :dev layers and stages them"
   narrate "The running OS is untouched until reboot – atomic, safe rollback point preserved"
   pause "Press ENTER to trigger vm-upgrade (will reboot the VM)..."
@@ -535,6 +588,11 @@ fi
 step "7d" "Verify the update on the VM"
 # ────────────────────────────────────────────────────────────
 if should_run "7d"; then
+  ascii "  ┌──────────────────┐     ssh vm-status       ┌──────────────────┐"
+  ascii "  │ Local Workstation│ ──────────────────────► │ UTM Virtual Machine│"
+  ascii "  └──────────────────┘                         │ (Verify v2 Digest)│"
+  ascii "                                               └──────────────────┘"
+  echo ""
   narrate "New digest should differ from what we saw in step 7b"
   narrate "motd should now show v2"
   pause "Press ENTER to verify..."
@@ -546,6 +604,11 @@ fi
 step "8" "Rollback"
 # ────────────────────────────────────────────────────────────
 if should_run "8"; then
+  ascii "  ┌──────────────────┐  sudo bootc rollback    ┌──────────────────┐"
+  ascii "  │ Local Workstation│ ──────────────────────► │ UTM Virtual Machine│"
+  ascii "  └──────────────────┘                         │ (Reverts & Reboot)│"
+  ascii "                                               └──────────────────┘"
+  echo ""
   narrate "bootc keeps the previous deployment – rollback is instant, no reinstall"
   narrate "One command, one reboot – back to the exact previous image"
   pause "Press ENTER to trigger rollback..."
@@ -563,6 +626,15 @@ fi
 step "9a" "OpenShift Virtualization – build disk image & provision VM"
 # ────────────────────────────────────────────────────────────
 if should_run "9a"; then
+  ascii "  ┌────────────────────┐   skopeo promote    ┌─────────────────────┐"
+  ascii "  │ Quay: dev-disk-amd │ ──────────────────► │ Quay: prod-disk-amd │"
+  ascii "  └────────────────────┘                     └─────────────────────┘"
+  ascii "                                                        │ CDI Pull"
+  ascii "  ┌────────────────────┐   Ansible Playbook  ┌──────────▼──────────┐"
+  ascii "  │ OpenShift Cluster  │ ◄────────────────── │ KubeVirt / Virt VM  │"
+  ascii "  │ (SNO x86_64)       │                     │ (provision-vm.yml)  │"
+  ascii "  └────────────────────┘                     └─────────────────────┘"
+  echo ""
   narrate "Same OS, now running as a KubeVirt VirtualMachine on SNO"
   narrate "We built :dev-disk-amd64 at step 4 — now we promote it to :prod-disk-amd64 (same digest, new tag)"
   narrate "CDI pulls :prod-disk-amd64 directly from Quay — no HTTP server needed"
@@ -603,6 +675,11 @@ fi
 step "9b" "OpenShift Virtualization – upgrade VM with Ansible"
 # ────────────────────────────────────────────────────────────
 if should_run "9b"; then
+  ascii "  ┌────────────────────┐   Ansible Playbook  ┌─────────────────────┐"
+  ascii "  │ upgrade-vm.yml     │ ──────────────────► │ virtctl SSH / bootc │"
+  ascii "  └────────────────────┘                     │ (Automated Upgrade) │"
+  ascii "                                             └─────────────────────┘"
+  echo ""
   narrate "Same bootc upgrade loop, now orchestrated by Ansible via virtctl SSH"
   narrate "Check before, upgrade, reboot, verify – fully automated"
   pause "Press ENTER to run the Ansible upgrade playbook..."
