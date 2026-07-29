@@ -26,7 +26,7 @@ VM_SSH_KEY="${VM_SSH_KEY:-id_ed25519}"  # Default key name
 podman login registry.redhat.io
 
 # Native single-arch build — no --platform emulation needed on Apple Silicon
-podman build \
+podman build -q \
   --platform "$PLATFORM" \
   --build-arg RHSM_ACTIVATION_KEY="${RHSM_ACTIVATION_KEY:-}" \
   --build-arg DEMO_PUB_KEY="$(cat ~/.ssh/${VM_SSH_KEY}.pub 2>/dev/null || echo '')" \

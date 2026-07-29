@@ -35,19 +35,49 @@ echo ""
 podman login registry.redhat.io
 podman login quay.io
 
+# Make sure the source image is actually present in local storage before we
+# ask bootc-image-builder to read it — it does NOT re-pull on its own if the
+# mount below doesn't line up with where it actually lives.
+podman pull "${IMAGE_ARM}"
+podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+
 mkdir -p output
+
+# ── Discover the real container storage paths ─────────────────
+# bootc-image-builder needs to see the same containers/storage the outer
+# `podman pull` above just wrote to, via bind mount. Unlike the GitHub
+# Actions runner (rootful, fixed at /var/lib/containers/storage), Podman on
+# Mac normally runs ROOTLESS inside the Podman Machine VM, and its storage
+# root lives at whatever `podman info` reports — typically something like
+# ~/.local/share/containers/storage inside that VM, NOT /var/lib/....
+# Hardcoding the rootful CI path here is exactly what produced:
+#   "could not access container storage ... did you forget -v ...?"
+GRAPHROOT="$(podman info --format '{{.Store.GraphRoot}}')"
+RUNROOT="$(podman info --format '{{.Store.RunRoot}}')"
+
+if [[ -z "${GRAPHROOT}" || -z "${RUNROOT}" ]]; then
+  echo "  ERROR: could not determine podman storage paths via 'podman info'." >&2
+  exit 1
+fi
+
+note_storage() { echo "  $1: $2"; }
+note_storage "GraphRoot" "${GRAPHROOT}"
+note_storage "RunRoot"   "${RUNROOT}"
 
 # Native arm64 run — no --platform emulation, same host arch as bootc-image-builder
 podman run --rm --privileged \
   --platform "${PLATFORM}" \
   -v "$(pwd)/config/config.toml:/config.toml:ro" \
   -v "$(pwd)/output:/output" \
+  -v "${GRAPHROOT}:${GRAPHROOT}" \
+  -v "${RUNROOT}:${RUNROOT}" \
   registry.redhat.io/rhel10/bootc-image-builder:latest \
   --type qcow2 \
   --config /config.toml \
   "${IMAGE_ARM}"
 
-# Fix ownership (podman run --privileged writes as root on rootful setups)
+# Fix ownership if anything came back root-owned (only matters on rootful
+# setups; on the normal rootless Mac path this is usually a no-op).
 if [[ "$(id -u)" -ne 0 ]] && command -v sudo &>/dev/null; then
   sudo chown -R "$(id -u):$(id -g)" output 2>/dev/null || true
 fi
@@ -62,7 +92,7 @@ FROM scratch
 COPY disk-arm.qcow2 /disk/disk.qcow2
 EOF
 
-podman build -q  \
+podman build -q \
   --platform "${PLATFORM}" \
   --no-cache \
   -f ctxdir/Containerfile \
