@@ -51,9 +51,7 @@ COPY scripts/vm-status.sh /usr/local/bin/vm-status
 COPY scripts/vm-upgrade.sh /usr/local/bin/vm-upgrade
 RUN chmod +x /usr/local/bin/vm-status /usr/local/bin/vm-upgrade
 
-RUN cat <<'EOF' > /usr/lib/sysusers.d/demo.conf
-u demo 1000 "Demo User" /home/demo /bin/bash
-EOF
+RUN echo 'u demo 1000 "Demo User" /home/demo /bin/bash' > /usr/lib/sysusers.d/demo.conf
 
 RUN systemd-sysusers && mkdir -p /var/home/demo && chown demo:demo /var/home/demo
 
