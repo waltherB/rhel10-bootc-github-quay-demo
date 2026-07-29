@@ -35,42 +35,75 @@ echo ""
 podman login registry.redhat.io
 podman login quay.io
 
-# Make sure the source image is actually present in local storage before we
-# ask bootc-image-builder to read it — it does NOT re-pull on its own if the
-# mount below doesn't line up with where it actually lives.
-podman pull "${IMAGE_ARM}"
+# IMAGE_ARM was built LOCALLY in step 2 and has NOT been pushed to Quay yet
+# (that happens later, in step 4) — so we must use what's already sitting in
+# local podman storage, not pull it from the registry (that tag doesn't
+# exist remotely yet and will 404 with "manifest unknown").
+if ! podman image exists "${IMAGE_ARM}"; then
+  echo "  ERROR: ${IMAGE_ARM} not found in local podman storage." >&2
+  echo "  Run step 2 (local build) first: ./scripts/local-build.sh" >&2
+  exit 1
+fi
+
+# bootc-image-builder itself DOES come from a registry — that pull is fine.
 podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
 
 mkdir -p output
 
-# ── Discover the real container storage paths ─────────────────
-# bootc-image-builder needs to see the same containers/storage the outer
-# `podman pull` above just wrote to, via bind mount. Unlike the GitHub
-# Actions runner (rootful, fixed at /var/lib/containers/storage), Podman on
-# Mac normally runs ROOTLESS inside the Podman Machine VM, and its storage
-# root lives at whatever `podman info` reports — typically something like
-# ~/.local/share/containers/storage inside that VM, NOT /var/lib/....
-# Hardcoding the rootful CI path here is exactly what produced:
-#   "could not access container storage ... did you forget -v ...?"
-GRAPHROOT="$(podman info --format '{{.Store.GraphRoot}}')"
-RUNROOT="$(podman info --format '{{.Store.RunRoot}}')"
-
-if [[ -z "${GRAPHROOT}" || -z "${RUNROOT}" ]]; then
-  echo "  ERROR: could not determine podman storage paths via 'podman info'." >&2
+# ── Preflight: bootc-image-builder requires a ROOTFUL Podman Machine ──
+# Per upstream docs and Red Hat's own guidance, bootc-image-builder simply
+# does not work against a rootless Podman Machine on macOS. If the machine
+# was ever switched between rootless/rootful, its lock file can also end up
+# stale, which surfaces as a cryptic Go panic ("failed to open N locks in
+# /libpod_lock: numerical result out of range") rather than a clear error —
+# so we check and fail fast with the actual fix instead.
+if [[ "$(podman info --format '{{.Host.Security.Rootless}}' 2>/dev/null)" == "true" ]]; then
+  echo "  ERROR: your Podman Machine is running ROOTLESS." >&2
+  echo "  bootc-image-builder requires rootful. Fix with:" >&2
+  echo "    podman machine stop" >&2
+  echo "    podman machine set --rootful" >&2
+  echo "    podman machine start" >&2
   exit 1
 fi
 
-note_storage() { echo "  $1: $2"; }
-note_storage "GraphRoot" "${GRAPHROOT}"
-note_storage "RunRoot"   "${RUNROOT}"
+# ── Discover the real container storage GraphRoot ──────────────
+# bootc-image-builder needs to see the same image layer data the outer
+# `podman pull`/`podman build` above wrote — that lives under GraphRoot.
+# Unlike the GitHub Actions runner (rootful, fixed at
+# /var/lib/containers/storage), your storage root here is whatever
+# `podman info` reports for THIS install (rootful or rootless).
+GRAPHROOT="$(podman info --format '{{.Store.GraphRoot}}')"
 
-# Native arm64 run — no --platform emulation, same host arch as bootc-image-builder
+if [[ -z "${GRAPHROOT}" ]]; then
+  echo "  ERROR: could not determine podman storage GraphRoot via 'podman info'." >&2
+  exit 1
+fi
+
+echo "  GraphRoot: ${GRAPHROOT}"
+
+# Deliberately do NOT also bind-mount RunRoot (e.g. /run/containers/storage).
+# RunRoot only holds ephemeral lock/state files, not image data, and sharing
+# it across two different containers/storage versions (host Podman vs. the
+# one baked into the bootc-image-builder image) causes a lock-file-size
+# mismatch: "failed to open N locks in /libpod_lock: numerical result out
+# of range". bootc-image-builder happily initializes its own throwaway
+# RunRoot inside the container while reading image data from the shared
+# GraphRoot — this matches Red Hat's own documented invocation, which only
+# ever mounts GraphRoot.
+#
+# Native run on the same arch as the image — no --platform needed here.
+# If this still fails with "failed to open N locks in /libpod_lock:
+# numerical result out of range", Podman's lock manager keeps its lock
+# file under /dev/shm (NOT under GraphRoot/RunRoot) — sharing that too
+# keeps the inner container's view of locks consistent with the host's.
+# As a last, non-destructive resort: podman system renumber
 podman run --rm --privileged \
-  --platform "${PLATFORM}" \
+  --pull=never \
+  --security-opt label=type:unconfined_t \
   -v "$(pwd)/config/config.toml:/config.toml:ro" \
   -v "$(pwd)/output:/output" \
   -v "${GRAPHROOT}:${GRAPHROOT}" \
-  -v "${RUNROOT}:${RUNROOT}" \
+  -v /dev/shm:/dev/shm \
   registry.redhat.io/rhel10/bootc-image-builder:latest \
   --type qcow2 \
   --config /config.toml \
@@ -92,7 +125,7 @@ FROM scratch
 COPY disk-arm.qcow2 /disk/disk.qcow2
 EOF
 
-podman build -q \
+podman build \
   --platform "${PLATFORM}" \
   --no-cache \
   -f ctxdir/Containerfile \
