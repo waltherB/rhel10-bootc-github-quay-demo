@@ -8,11 +8,14 @@
 #
 # Run:
 #   ansible-playbook ansible/provision-vm.yml \
-#     -e disk_image=quay.io/waba/bootc-guide:prod-disk
+#     -e disk_image=quay.io/waba/bootc-guide:prod-disk-amd64
 #
 # Variables (override on CLI with -e or edit defaults below):
-#   disk_image   - KubeVirt containerDisk OCI image on Quay
-#                  Build with: IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-push-disk.sh
+#   disk_image   - KubeVirt containerDisk OCI image on Quay (AMD64 only —
+#                  this always runs on an x86_64 SNO cluster)
+#                  Built by GitHub Actions: .github/workflows/build-qcow2.yml
+#                  (from IMAGE_AMD, tagged :dev-disk-amd64, then promoted to
+#                  :prod-disk-amd64 by scripts/local-promote-disk.sh)
 #                  (FROM scratch image with /disk/disk.qcow2 — CDI knows this format)
 #   vm_name      - VM object name       (default: rhel10-bootc-demo)
 #   vm_namespace - target namespace     (default: bootc-vms)
@@ -24,14 +27,20 @@
   gather_facts: false
 
   vars:
-    # disk_image: KubeVirt containerDisk OCI image pushed to Quay by local-push-disk.sh.
-    # This is a FROM-scratch image with the qcow2 at /disk/disk.qcow2.
-    # CDI's registry importer natively understands this format (pullMethod: node
-    # means the cluster node's CRI pulls it, so no extra HTTP server is needed).
-    # Build it with:
-    #   IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-qcow2.sh
-    #   IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-push-disk.sh
-    disk_image: "quay.io/waba/bootc-guide:prod-disk"
+    # disk_image: AMD64 KubeVirt containerDisk OCI image pushed to Quay by the
+    # build-qcow2.yml GitHub Actions workflow (native amd64 runner, no
+    # cross-arch build). This is a FROM-scratch image with the qcow2 at
+    # /disk/disk.qcow2. CDI's registry importer natively understands this
+    # format (pullMethod: node means the cluster node's CRI pulls it, so no
+    # extra HTTP server is needed).
+    #
+    # Build/promote it with:
+    #   gh workflow run build-qcow2.yml --field image=$IMAGE_AMD \
+    #     --field output_ref=${IMAGE_AMD%:*}:dev-disk-amd64
+    #   SOURCE_DISK=...:dev-disk-amd64 TARGET_DISK=...:prod-disk-amd64 \
+    #     ./scripts/local-promote-disk.sh
+    # (demo-run.sh steps 4 and 9a do this for you)
+    disk_image: "quay.io/waba/bootc-guide:prod-disk-amd64"
     vm_name: "rhel10-bootc-demo"
     vm_namespace: "bootc-vms"
     vm_cores: 2
@@ -62,10 +71,12 @@
           - disk_image | length > 0
           - '"REPLACE" not in disk_image'
         fail_msg: >
-          disk_image is not set. Build a containerDisk image from the bootc image with:
-            IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-qcow2.sh
-            IMAGE=quay.io/waba/bootc-guide:prod ./scripts/local-push-disk.sh
-          Then pass -e disk_image=quay.io/waba/bootc-guide:prod-disk
+          disk_image is not set. Build/promote the AMD64 containerDisk image with:
+            gh workflow run build-qcow2.yml --field image=$IMAGE_AMD \
+              --field output_ref=${IMAGE_AMD%:*}:dev-disk-amd64
+            SOURCE_DISK=...:dev-disk-amd64 TARGET_DISK=...:prod-disk-amd64 \
+              ./scripts/local-promote-disk.sh
+          Then pass -e disk_image=quay.io/waba/bootc-guide:prod-disk-amd64
 
     - name: Read local docker config for Quay auth
       set_fact:
@@ -194,7 +205,7 @@
               # registry source with pullMethod: node uses the cluster node's CRI
               # to pull the containerDisk image directly from Quay — no HTTP server
               # needed. The image must be a FROM-scratch OCI image with the disk
-              # at /disk/disk.qcow2 (built by scripts/local-push-disk.sh).
+              # at /disk/disk.qcow2 (built by build-qcow2.yml, AMD64 only).
               registry:
                 url: "docker://{{ disk_image }}"
                 secretRef: quay-cdi-pull-secret
@@ -232,7 +243,7 @@
                   # defaults to SeaBIOS, which cannot boot a GPT disk and hangs
                   # forever at "Booting from Hard Disk...".
                   machine:
-                    type: pc-q35-rhel9.4.0  # Ensures AMD64 architecture
+                    type: pc-q35-rhel9.4.0  # AMD64 machine type — matches disk_image's arch
                   features:
                     acpi: {}
                     smm:

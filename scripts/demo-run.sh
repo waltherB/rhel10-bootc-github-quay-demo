@@ -9,14 +9,26 @@
 #
 #  To restart from a specific step, set START_STEP:
 #    START_STEP=9a ./scripts/demo-run.sh
-#  Valid step IDs: 1 2 3 4 5 6 7a 7b 7c 7d 8 9a 9b
+#  Valid step IDs: 1 2 2b 3 4 5 6 7a 7b 7c 7d 8 9a 9b
+#
+#  ARCH SPLIT:
+#    ARM64 bootc image + qcow2 disk are built LOCALLY (native on Mac),
+#    used only for the local UTM VM demo (steps 2, 2b, 7b-8).
+#    AMD64 bootc image + qcow2 disk are built REMOTELY by GitHub
+#    Actions (native on ubuntu-latest runners), used only for
+#    OpenShift Virtualization on the x86_64 SNO cluster (step 9a).
+#    The two never cross paths — see scripts/demo-env.sh.example.
 #
 #  To pre-set variables, create scripts/demo-env.sh:
-#    export IMAGE="quay.io/waba/bootc-guide:dev"
+#    export IMAGE_ARM="quay.io/waba/bootc-guide:dev-arm64"
+#    export IMAGE_AMD="quay.io/waba/bootc-guide:dev-amd64"
+#    export DISK_IMAGE_ARM="quay.io/waba/bootc-guide:dev-disk-arm64"
+#    export DISK_IMAGE_AMD="quay.io/waba/bootc-guide:dev-disk-amd64"
 #    export VM_SSH="demo@192.168.65.10"
 #    export SNO_API="https://api.waba-sno.adc.lan"
 #    export SNO_TOKEN="$(oc whoami -t)"
-#    export DISK_IMAGE="quay.io/waba/bootc-guide:prod-disk"  # set to skip rebuild
+#    export DISK_IMAGE_AMD="quay.io/waba/bootc-guide:prod-disk-amd64"  # skip rebuild
+#  See scripts/demo-env.sh.example for the full variable set.
 #  It will be sourced automatically if it exists.
 # ============================================================
 set -euo pipefail
@@ -38,7 +50,8 @@ RED='\033[1;31m'       # warnings / manual actions needed
 RESET='\033[0m'
 
 # ── Config – defaults only used if env var is completely absent ──
-: "${IMAGE:=quay.io/waba/bootc-guide:dev}"
+: "${IMAGE_ARM:=quay.io/waba/bootc-guide:dev-arm64}"
+: "${IMAGE_AMD:=quay.io/waba/bootc-guide:dev-amd64}"
 : "${VM_SUDO_PASSWORD:=redhat}"
 : "${VM_USER:=demo}"
 
@@ -115,7 +128,7 @@ prompt_var() {
 # Steps are ordered in STEP_ORDER; once we reach START_STEP we flip
 # _STEP_REACHED=1 and every subsequent step runs normally.
 
-STEP_ORDER=(1 2 3 4 5 6 7a 7b 7c 7d 8 9a 9b)
+STEP_ORDER=(1 2 2b 3 4 5 6 7a 7b 7c 7d 8 9a 9b)
 _STEP_REACHED=0
 
 step_index() {
@@ -272,7 +285,8 @@ if [[ -n "${START_STEP:-}" ]]; then
   echo ""
 fi
 
-prompt_var IMAGE       "  Base image: " "quay.io/waba/bootc-guide:dev"
+prompt_var IMAGE_ARM   "  Local ARM64 bootc image (Mac / UTM VM): " "quay.io/waba/bootc-guide:dev-arm64"
+prompt_var IMAGE_AMD   "  Remote AMD64 bootc image (GitHub CI / OpenShift): " "quay.io/waba/bootc-guide:dev-amd64"
 prompt_var VM_SSH      "  UTM VM SSH target (e.g. demo@192.168.65.10) — check 'arp -a': "
 prompt_var VM_SSH_KEY  "  SSH private key for VM access: " "${HOME}/.ssh/id_ed25519"
 prompt_var VM_USER    "  SSH username for the VM: " "${VM_USER:-demo}"
@@ -306,14 +320,15 @@ if [[ -z "${QUAY_DOCKER_CONFIG_B64:-}" ]]; then
 fi
 
 echo ""
-note "IMAGE     = ${IMAGE}"
+note "IMAGE_ARM = ${IMAGE_ARM}   (local, UTM VM)"
+note "IMAGE_AMD = ${IMAGE_AMD}   (GitHub CI, OpenShift Virt)"
 note "VM SSH    = ${VM_SSH}"
 note "VM USER   = ${VM_USER}"
 note "VM SSH KEY      = $(mask_value "$VM_SSH_KEY")"
 note "SNO API   = ${SNO_API}"
 note "SNO TOKEN = ${SNO_TOKEN:0:8}…  (truncated)"
-# DISK_IMAGE is derived at step 9a from IMAGE if not pre-set
-note "DISK_IMAGE= ${DISK_IMAGE:-"(auto: ${IMAGE%:*}:$([ -n "${IMAGE##*:}" ] && echo "${IMAGE##*:}-disk" || echo "prod-disk"))"}"
+# DISK_IMAGE_AMD is derived at step 9a from IMAGE_AMD if not pre-set
+note "DISK_IMAGE_AMD= ${DISK_IMAGE_AMD:-"(auto: ${IMAGE_AMD%:*}:${IMAGE_AMD##*:}-disk)"}"
 echo ""
 if [[ ! -f "${VM_SSH_KEY}" ]]; then
   echo -e "${RED}  ERROR: SSH key ${VM_SSH_KEY} not found. Create or specify a valid private key.${RESET}"
@@ -342,18 +357,30 @@ step "2" "Local build on Mac M4"
 # ────────────────────────────────────────────────────────────
 if should_run "2"; then
   narrate "Build the bootc image locally for arm64 (native on M4)"
-  narrate "PLATFORM defaults to linux/arm64 – no cross-compilation needed"
+  narrate "TARGET_PLATFORM_LOCAL is linux/arm64 – no cross-compilation, no emulation"
   echo ""
 
-  # Step 2 always builds natively for arm64 on this Mac — this is a
-  # separate concern from the qcow2 disk build (now done in GitHub Actions,
-  # see Step 4), which targets amd64 for the x86_64 KubeVirt cluster.
-  # Deliberately NOT reusing a shared TARGET_PLATFORM: mixing the two up is
+  # Step 2 always builds natively for arm64 on this Mac, tagged :dev-arm64.
+  # This is entirely separate from the amd64 image (Step 4/5, built by
+  # GitHub Actions), which is what OpenShift Virt ultimately runs.
+  # Deliberately NOT reusing a shared PLATFORM var: mixing the two up is
   # exactly what caused a mislabeled arm64 disk to reach OpenShift before.
-  LOCAL_BUILD_PLATFORM="linux/arm64"
-  note "IMAGE=${IMAGE}  TARGET_PLATFORM=${LOCAL_BUILD_PLATFORM}"
+  note "IMAGE_ARM=${IMAGE_ARM}  TARGET_PLATFORM_LOCAL=${TARGET_PLATFORM_LOCAL:-linux/arm64}"
   pause "Press ENTER to start local build..."
-  run "TARGET_PLATFORM=${LOCAL_BUILD_PLATFORM} ./scripts/local-build.sh"
+  run "IMAGE_ARM=${IMAGE_ARM} TARGET_PLATFORM_LOCAL=${TARGET_PLATFORM_LOCAL:-linux/arm64} ./scripts/local-build.sh"
+  pause
+fi
+
+# ────────────────────────────────────────────────────────────
+step "2b" "Build ARM64 qcow2 disk image locally (for UTM VM)"
+# ────────────────────────────────────────────────────────────
+if should_run "2b"; then
+  narrate "bootc-image-builder runs natively arm64-on-arm64 here — no emulation"
+  narrate "This qcow2 is only ever used to (re)provision the local UTM VM,"
+  narrate "never OpenShift — that always gets the amd64 disk from GitHub Actions"
+  note "IMAGE_ARM=${IMAGE_ARM}  DISK_IMAGE_ARM=${DISK_IMAGE_ARM:-"${IMAGE_ARM%:*}:dev-disk-arm64"}"
+  pause "Press ENTER to build and push the ARM64 qcow2..."
+  run "IMAGE_ARM=${IMAGE_ARM} DISK_IMAGE_ARM=${DISK_IMAGE_ARM:-"${IMAGE_ARM%:*}:dev-disk-arm64"} ./scripts/local-build-qcow2.sh"
   pause
 fi
 
@@ -364,7 +391,7 @@ if should_run "3"; then
   narrate "Run the image as a plain container first – fast feedback before touching a VM"
   narrate "Check the web page and the motd are baked in"
   pause "Press ENTER to run smoke test..."
-  run ./scripts/local-test.sh
+  run "IMAGE=${IMAGE_ARM} ./scripts/local-test.sh"
   pause
 fi
 
@@ -372,33 +399,34 @@ fi
 step "4" "Push and sign the image"
 # ────────────────────────────────────────────────────────────
 if should_run "4"; then
-  narrate "Push :dev to Quay.io"
+  narrate "Push :dev-arm64 to Quay.io (local ARM64 image, for the UTM VM)"
   narrate "Sign with keyless Cosign (OIDC – no long-lived key material)"
   pause "Press ENTER to push and sign..."
-  run ./scripts/local-push.sh
-  run ./scripts/local-sign-keyless.sh
+  run "IMAGE_ARM=${IMAGE_ARM} ./scripts/local-push.sh"
+  run "IMAGE=${IMAGE_ARM} ./scripts/local-sign-keyless.sh"
 
   narrate "Pushing current git changes to main to trigger GitHub Actions CI..."
+  narrate "CI builds :dev-amd64 natively on the runner — this is the image OpenShift will get"
   if ! git diff-index --quiet HEAD --; then
     note "Local changes detected. Committing and pushing..."
     run git commit -a -m "\"chore: push presentation progress to trigger CI\""
   fi
   run git push
 
-  narrate "Starting containerDisk conversion (:dev-disk) via GitHub Actions in the BACKGROUND"
-  note "This runs on a native amd64 GitHub-hosted runner — no local cross-arch build,"
-  note "so there's no risk of accidentally shipping an arm64 disk to the x86_64 cluster."
+  narrate "Starting AMD64 containerDisk conversion (:dev-disk-amd64) via GitHub Actions in the BACKGROUND"
+  note "This runs on a native amd64 GitHub-hosted runner against IMAGE_AMD — no cross-arch"
+  note "build anywhere in this path, so there's no risk of an arm64 disk reaching OpenShift."
   note "This runs silently in the background so we can proceed to Step 5 immediately."
 
-  _DEV_BASE="${IMAGE%:*}"
-  _DEV_TAG="${IMAGE##*:}"
-  export DEV_DISK_IMAGE="${_DEV_BASE}:${_DEV_TAG}-disk"
+  _DEV_BASE="${IMAGE_AMD%:*}"
+  _DEV_TAG="${IMAGE_AMD##*:}"
+  export DISK_IMAGE_AMD="${DISK_IMAGE_AMD:-${_DEV_BASE}:${_DEV_TAG}-disk}"
 
   (
     echo "=== ContainerDisk Build (GitHub Actions) Started at $(date) ===" > disk-build.log
     if gh workflow run build-qcow2.yml \
-         --field image="${IMAGE}" \
-         --field output_ref="${DEV_DISK_IMAGE}" >> disk-build.log 2>&1; then
+         --field image="${IMAGE_AMD}" \
+         --field output_ref="${DISK_IMAGE_AMD}" >> disk-build.log 2>&1; then
       sleep 8
       RUN_ID="$(gh run list --workflow=build-qcow2.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
       echo "Watching GitHub Actions run ${RUN_ID}..." >> disk-build.log
@@ -536,8 +564,9 @@ step "9a" "OpenShift Virtualization – build disk image & provision VM"
 # ────────────────────────────────────────────────────────────
 if should_run "9a"; then
   narrate "Same OS, now running as a KubeVirt VirtualMachine on SNO"
-  narrate "We built :dev-disk at step 4 — now we promote it to :prod-disk (same digest, new tag)"
-  narrate "CDI pulls :prod-disk directly from Quay — no HTTP server needed"
+  narrate "We built :dev-disk-amd64 at step 4 — now we promote it to :prod-disk-amd64 (same digest, new tag)"
+  narrate "CDI pulls :prod-disk-amd64 directly from Quay — no HTTP server needed"
+  narrate "Only the AMD64 disk is ever used here — the x86_64 SNO cluster can't run arm64 anyway"
   note "Logging in to SNO cluster: ${SNO_API}"
   if [[ -n "${SNO_TOKEN}" ]]; then
     run oc login "${SNO_API}" --token="${SNO_TOKEN}" --insecure-skip-tls-verify
@@ -546,27 +575,25 @@ if should_run "9a"; then
     pause "Press ENTER once logged in to SNO..."
   fi
 
-  # Derive PROD_IMAGE and DISK_IMAGE from IMAGE base
-  # IMAGE is :dev; for the VM we want :prod and :prod-disk
-  _BASE="${IMAGE%:*}"
-  PROD_IMAGE="${_BASE}:prod"
-  if [[ -z "${DISK_IMAGE:-}" ]]; then
-    export DISK_IMAGE="${_BASE}:prod-disk"
-  fi
-  note "PROD_IMAGE = ${PROD_IMAGE}"
-  note "DISK_IMAGE = ${DISK_IMAGE}  (containerDisk for CDI)"
+  # Derive PROD_IMAGE_AMD / PROD_DISK_IMAGE_AMD from IMAGE_AMD base
+  _BASE="${IMAGE_AMD%:*}"
+  PROD_IMAGE_AMD="${PROD_IMAGE_AMD:-${_BASE}:prod-amd64}"
+  SOURCE_DISK_AMD="${DISK_IMAGE_AMD:-${_BASE}:dev-disk-amd64}"
+  PROD_DISK_IMAGE_AMD="${PROD_DISK_IMAGE_AMD:-${_BASE}:prod-disk-amd64}"
+  note "PROD_IMAGE_AMD      = ${PROD_IMAGE_AMD}"
+  note "PROD_DISK_IMAGE_AMD = ${PROD_DISK_IMAGE_AMD}  (containerDisk for CDI)"
 
-  # ── 9a-i: Promote :dev-disk → :prod-disk ───────────────
-  narrate "Step 9a-i: promote :dev-disk → :prod-disk via skopeo copy (same digest, new tag)"
-  narrate "Mirrors the OS image promote: :dev → :prod — no rebuild, what was tested is what runs"
-  pause "Press ENTER to promote :dev-disk → :prod-disk..."
-  run IMAGE="${PROD_IMAGE}" ./scripts/local-promote-disk.sh
+  # ── 9a-i: Promote :dev-disk-amd64 → :prod-disk-amd64 ───────
+  narrate "Step 9a-i: promote :dev-disk-amd64 → :prod-disk-amd64 via skopeo copy (same digest, new tag)"
+  narrate "Mirrors the OS image promote: :dev-amd64 → :prod-amd64 — no rebuild, what was tested is what runs"
+  pause "Press ENTER to promote :dev-disk-amd64 → :prod-disk-amd64..."
+  run SOURCE_DISK="${SOURCE_DISK_AMD}" TARGET_DISK="${PROD_DISK_IMAGE_AMD}" ./scripts/local-promote-disk.sh
 
   # ── 9a-ii: Provision the VM via Ansible ─────────────────
   narrate "Step 9a-ii: Ansible creates Namespace, PullSecret, DataVolume and VirtualMachine"
   pause "Press ENTER to run the Ansible provisioning playbook..."
   run ansible-playbook ansible/provision-vm.yml \
-    -e "disk_image=${DISK_IMAGE}" \
+    -e "disk_image=${PROD_DISK_IMAGE_AMD}" \
     -e "ssh_pub_key=\"$(cat ~/.ssh/id_ed25519.pub 2>/dev/null || echo 'REPLACE_KEY')\""
   manual "Open OpenShift console → Virtualization → VirtualMachines and show the VM starting"
   pause

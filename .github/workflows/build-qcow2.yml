@@ -9,13 +9,19 @@ on:
         default: 'main'
         type: string
       image:
-        description: "Source bootc container image to convert"
+        description: "Source bootc container image to convert (must be amd64)"
         required: false
-        default: "quay.io/waba/bootc-guide:dev"
-      target_platform:
-        description: "Target architecture (e.g. linux/amd64 or linux/arm64)"
-        required: false
-        default: "linux/amd64"
+        default: "quay.io/waba/bootc-guide:dev-amd64"
+
+# NOTE: this workflow is amd64-only by design. GitHub-hosted ubuntu
+# runners are native amd64, and bootc-image-builder's source image
+# (built by the CI pipeline as :dev-amd64 / :prod-amd64) is amd64 too.
+# We deliberately do NOT pass --platform to podman run below: forcing
+# a platform flag that already matches the runner's native arch still
+# routes the pull/run through Podman's cross-arch code path, which is
+# what caused the persistent "image not known / no such container"
+# error against registry.redhat.io/rhel10/bootc-image-builder. Native
+# amd64-on-amd64, no emulation, no --platform flag needed.
 
 jobs:
   build:
@@ -24,7 +30,6 @@ jobs:
     env:
       IMAGE: ${{ github.event.inputs.image }}
       OUTPUT_REF: ${{ github.event.inputs.output_ref }}
-      TARGET_PLATFORM: ${{ github.event.inputs.target_platform || 'linux/amd64' }}
 
     steps:
       - name: Checkout
@@ -32,7 +37,7 @@ jobs:
 
       - name: Resolve output ref
         run: |
-          if [[ -n "$OUTPUT_REF" ]]; then
+          if [[ -n "$OUTPUT_REF" && "$OUTPUT_REF" != "main" ]]; then
             RESOLVED="$OUTPUT_REF"
           else
             BASE="${IMAGE%:*}"
@@ -41,29 +46,6 @@ jobs:
           fi
           echo "Resolved output ref: $RESOLVED"
           echo "OUTPUT_REF=$RESOLVED" >> "$GITHUB_ENV"
-
-      - name: Log in to registry.redhat.io
-        run: |
-          # Check if secrets are set
-          if [ -z "${{ secrets.RH_REGISTRY_USERNAME }}" ] || [ -z "${{ secrets.RH_REGISTRY_PASSWORD }}" ]; then
-            echo "❌ ERROR: RH_REGISTRY_USERNAME or RH_REGISTRY_PASSWORD secrets are not set!"
-            echo "Please add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-          exit 1
-          fi
-    
-          echo "Logging in to registry.redhat.io..."
-          echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
-          sudo podman login registry.redhat.io \
-          -u "${{ secrets.RH_REGISTRY_USERNAME }}" \
-          --password-stdin
-    
-          # Verify login succeeded
-          if [ $? -eq 0 ]; then
-            echo "✅ Successfully logged in to registry.redhat.io"
-          else
-            echo "❌ Login failed! Please check your credentials."
-            exit 1
-          fi 
 
       - name: Install podman
         run: |
@@ -91,7 +73,6 @@ jobs:
           printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' | \
             sudo tee /etc/containers/storage.conf
 
-      # === FIX: Create writable runtime directory for Podman ===
       - name: Setup Podman runtime directory
         run: |
           export XDG_RUNTIME_DIR=/tmp/podman-runtime
@@ -103,6 +84,11 @@ jobs:
 
       - name: Log in to registry.redhat.io
         run: |
+          if [ -z "${{ secrets.RH_REGISTRY_USERNAME }}" ] || [ -z "${{ secrets.RH_REGISTRY_PASSWORD }}" ]; then
+            echo "❌ ERROR: RH_REGISTRY_USERNAME or RH_REGISTRY_PASSWORD secrets are not set!"
+            echo "Please add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
           echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
             sudo podman login registry.redhat.io \
               -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
@@ -125,7 +111,6 @@ jobs:
         run: |
           mkdir -p output
           sudo podman run --rm --privileged \
-            --platform "${{ env.TARGET_PLATFORM }}" \
             -v ./config/config.toml:/config.toml:ro \
             -v ./output:/output \
             -v /var/lib/containers/storage:/var/lib/containers/storage \
@@ -141,22 +126,20 @@ jobs:
         run: sudo chown -R "$(id -u):$(id -g)" output
 
       - name: Rename output
-        run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd.qcow2
+        run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd64.qcow2
 
       - name: Build containerDisk image
         run: |
           mkdir -p ctxdir
-          cp output/qcow2/disk-amd.qcow2 ctxdir/
+          cp output/qcow2/disk-amd64.qcow2 ctxdir/
           cat > ctxdir/Containerfile <<'EOF'
           FROM scratch
-          COPY disk-amd.qcow2 /disk/disk.qcow2
+          COPY disk-amd64.qcow2 /disk/disk.qcow2
           EOF
           sudo podman build \
-            --platform linux/amd64 \
             --no-cache \
             -f ctxdir/Containerfile \
             -t "$OUTPUT_REF" \
-            -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             ctxdir
 
       - name: Push containerDisk image to Quay
@@ -165,6 +148,6 @@ jobs:
       - name: Upload as workflow artifact
         uses: actions/upload-artifact@v4
         with:
-          name: disk-amd-qcow2
-          path: output/qcow2/disk-amd.qcow2
+          name: disk-amd64-qcow2
+          path: output/qcow2/disk-amd64.qcow2
           retention-days: 7

@@ -9,10 +9,23 @@
 export RHSM_ACTIVATION_KEY=
 export RHSM_ORG=
 
+# Quay.io repository base (no tag)
+export QUAY_REPO="quay.io/xxx/yyyyy"
 
-# IMAGE must include the tag — used for tag-stripping logic (:dev → :dev-disk etc.)
-export IMAGE="quay.io/xxx/yyyyy:dev"
-export TARGET_PLATFORM="linux/arm64"
+# ── Local (ARM64) — built natively on Mac, used for the UTM VM demo ──
+export TARGET_PLATFORM_LOCAL="linux/arm64"
+export IMAGE_ARM="${QUAY_REPO}:dev-arm64"
+export DISK_IMAGE_ARM="${QUAY_REPO}:dev-disk-arm64"
+export PROD_IMAGE_ARM="${QUAY_REPO}:prod-arm64"
+export PROD_DISK_IMAGE_ARM="${QUAY_REPO}:prod-disk-arm64"
+
+# ── Remote (AMD64) — built natively on GitHub-hosted ubuntu runners,
+#    used for OpenShift Virtualization (x86_64 SNO cluster) ──
+export TARGET_PLATFORM_REMOTE="linux/amd64"
+export IMAGE_AMD="${QUAY_REPO}:dev-amd64"
+export DISK_IMAGE_AMD="${QUAY_REPO}:dev-disk-amd64"
+export PROD_IMAGE_AMD="${QUAY_REPO}:prod-amd64"
+export PROD_DISK_IMAGE_AMD="${QUAY_REPO}:prod-disk-amd64"
 
 export VM_SSH="demo@192.168.64.9"
 export VM_SSH_KEY="${HOME}/.ssh/id_ed25519"
@@ -21,9 +34,10 @@ export VM_USER="demo"
 export SNO_API="https://api.xxx-sno.example.lan:6443"
 export SNO_TOKEN="$(oc whoami -t 2>/dev/null || true)"
 
-# Uncomment to skip the qcow2 rebuild when restarting at step 9a.
-# The promote (:dev-disk → :prod-disk) will still run but is a fast skopeo copy.
-# export DISK_IMAGE="quay.io/waba/bootc-guide:prod-disk"
+# Uncomment to skip the amd64 qcow2 rebuild when restarting at step 9a.
+# The promote (:dev-disk-amd64 → :prod-disk-amd64) will still run but is
+# a fast skopeo copy, no rebuild.
+# export DISK_IMAGE_AMD="${PROD_DISK_IMAGE_AMD}"
 
 # Quay auth for Ansible (auto-generated from Podman auth file)
 export QUAY_DOCKER_CONFIG_B64="$(base64 < ~/.config/containers/auth.json 2>/dev/null || true)"
