@@ -28,7 +28,7 @@ jobs:
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_ROBOT_SECRET }}
+          password: ${{ secrets.QUAY_TOKEN }}
 
       # PHASE 1: Build the AMD64 OS container image
       - name: Build bootc AMD64 Container Image
@@ -82,7 +82,7 @@ jobs:
         with:
           registry: quay.io
           username: ${{ secrets.QUAY_USERNAME }}
-          password: ${{ secrets.QUAY_ROBOT_SECRET }}
+          password: ${{ secrets.QUAY_TOKEN }}
 
       # PHASE 1: Build the ARM64 OS container image
       - name: Build bootc ARM64 Container Image
