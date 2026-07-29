@@ -7,3 +7,6 @@ actions-runner/
 pull-secret.json
 *.log
 .github/workflows/build-qcow2.yml
+ctxdir/disk-arm.qcow2
+.gitignore
+output/qcow2/disk-arm.qcow2
