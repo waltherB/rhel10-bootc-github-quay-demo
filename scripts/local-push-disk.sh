@@ -60,7 +60,7 @@ EOF
 echo "  Building containerDisk image..."
 # Use --platform linux/amd64 — the disk is architecture-independent content
 # but CDI on x86 OpenShift expects an amd64-compatible image manifest
-podman build \
+podman build -q \
   --platform linux/amd64 \
   --no-cache \
   -f "${TMPDIR}/Containerfile" \

@@ -125,7 +125,7 @@ FROM scratch
 COPY disk-arm.qcow2 /disk/disk.qcow2
 EOF
 
-podman build \
+podman build -q \
   --platform "${PLATFORM}" \
   --no-cache \
   -f ctxdir/Containerfile \
