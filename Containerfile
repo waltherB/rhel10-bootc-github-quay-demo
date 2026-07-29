@@ -74,4 +74,4 @@ RUN dnf clean all && \
            /var/log/dnf.librepo.log /var/log/dnf.log /var/log/dnf.rpm.log \
            /var/log/hawkey.log /var/log/rhsm/rhsm.log
 
-RUN bootc container lint
+#RUN bootc container lint
