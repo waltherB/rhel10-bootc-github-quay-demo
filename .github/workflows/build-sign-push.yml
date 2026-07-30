@@ -55,18 +55,28 @@ jobs:
       - name: Push AMD64 Container Image to Quay
         run: |
           podman push ${{ env.IMAGE_AMD }}
+      
+      - name: Debug storage
+        run: |
+          sudo podman info
+          sudo ls -ld /var/lib/containers/storage
+          sudo ls -ld /run/containers/storage || true    
 
       # PHASE 2: Pull container image from Quay & assemble qcow2 disk
       - name: Build bootc AMD64 qcow2 Disk
         run: |
           mkdir -p output-amd64
+
           sudo podman run --rm --privileged \
             -v ./output-amd64:/output \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            -v /run/containers/storage:/run/containers/storage \
+            -v /etc/containers/storage.conf:/etc/containers/storage.conf:ro \
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --target-arch amd64 \
-            ${{ env.IMAGE_AMD }}
-
+            "${IMAGE_AMD}"
+        
       - name: Upload AMD64 qcow2 Artifact
         uses: actions/upload-artifact@v4
         with:
