@@ -8,49 +8,71 @@ Target setup:
 
 - MacBook Pro M4
 - Podman + Podman Desktop
-- UTM for RHEL 10 VMs
+- UTM for RHEL 10 VMs (ARM64, local)
 - Quay.io as image registry
 - GitHub as source repo and CI
-- OpenShift Virtualization (KubeVirt) for VM lifecycle on SNO
+- OpenShift Virtualization (KubeVirt) for VM lifecycle on an x86_64 SNO cluster
 - Ansible for VM provisioning and upgrades
 
 > Important: replace `quay.io/waba/bootc-guide` with your actual Quay namespace/repository throughout.
 
-## Quick local flow
+### Architecture split: ARM64 (local) vs AMD64 (CI)
+
+The demo deliberately never cross-builds or emulates a foreign architecture — that's what caused a
+persistent "image not known / no such container" error against `bootc-image-builder` in earlier
+iterations of this project. Instead there are two fully separate, native-only paths that never cross:
+
+| | ARM64 | AMD64 |
+|---|---|---|
+| **Built on** | MacBook Pro M4, natively (`podman build`, no `--platform` emulation) | GitHub-hosted `ubuntu-latest` runner, natively |
+| **Image tag** | `:dev-arm64` / `:prod-arm64` | `:dev-amd64` / `:prod-amd64` |
+| **Disk tag** | `:dev-disk-arm64` / `:prod-disk-arm64` | `:dev-disk-amd64` / `:prod-disk-amd64` |
+| **Used for** | Local UTM VM demo | OpenShift Virtualization on the x86_64 SNO cluster |
+| **Built by** | `local-build.sh`, `local-build-qcow2.sh` | `.github/workflows/build-sign-push.yml`, `.github/workflows/build-qcow2.yml` |
+
+## Quick local flow (ARM64, for the UTM VM)
 
 ```bash
 podman login registry.redhat.io
 podman login quay.io
 cosign login quay.io -u <your-quay-username> -p <your-quay-token>
 
-export IMAGE=quay.io/waba/bootc-guide:dev
+export IMAGE_ARM=quay.io/waba/bootc-guide:dev-arm64
 
-./scripts/local-build.sh          # build OCI bootc image
+./scripts/local-build.sh          # build OCI bootc image, native arm64
 ./scripts/local-test.sh           # smoke test as container
-./scripts/local-push.sh           # push :dev to Quay
+./scripts/local-push.sh           # push :dev-arm64 to Quay
 ./scripts/local-sign-keyless.sh   # sign with keyless Cosign
-./scripts/local-qcow2.sh          # convert to qcow2 (for UTM or OpenShift)
-./scripts/local-push-disk.sh      # wrap qcow2 as containerDisk, push :dev-disk
+./scripts/local-build-qcow2.sh    # convert to qcow2 natively (arm64), push containerDisk to Quay
 ```
 
 > **Note:** `cosign` uses its own credential store — run `cosign login` separately from `podman login`.  
-> Podman auth is stored in `~/.config/containers/auth.json` on macOS.
+> Podman auth is stored in `~/.config/containers/auth.json` on macOS.  
+> `bootc-image-builder` requires a **rootful** Podman Machine on macOS (`podman machine set --rootful`) — `local-build-qcow2.sh` checks this and fails fast with the fix if it's rootless.
 
-Import `output/qcow2/disk.qcow2` in UTM to create a local ARM VM.
+Import `output/qcow2/disk-arm.qcow2` in UTM to create a local ARM VM.
 
 ## Tagging strategy
 
 | Tag | Produced by | Content |
 |---|---|---|
-| `:dev` | Every push to `main` | Latest built OCI bootc image |
-| `:dev-disk` | `local-push-disk.sh` after `:dev` push | KubeVirt containerDisk for CDI import |
-| `:prod` | `promote-rhel10-bootc-prod` workflow | Promoted from `:dev` (same digest) |
-| `:prod-disk` | `local-promote-disk.sh` | Promoted from `:dev-disk` (same digest) |
+| `:dev-arm64` | `local-build.sh` + `local-push.sh` | Local ARM64 bootc image, for UTM |
+| `:dev-disk-arm64` | `local-build-qcow2.sh` | ARM64 KubeVirt containerDisk, for UTM only |
+| `:dev-amd64` | `build-sign-push.yml`, every push to `main` | AMD64 bootc image, native GitHub-hosted build |
+| `:dev-disk-amd64` | `build-qcow2.yml` (manual dispatch) | AMD64 KubeVirt containerDisk, for CDI import on SNO |
+| `:prod-amd64` | `promote-rhel10-bootc-prod` workflow | Promoted from `:dev-amd64` (same digest) |
+| `:prod-disk-amd64` | `local-promote-disk.sh` | Promoted from `:dev-disk-amd64` (same digest, via `skopeo copy`) |
 | `:v1.0.0` | `git tag v1.0.0` | Immutable release |
 
 SHA traceability is preserved via the image digest — no `dev-<sha>` tags needed.
 
 ## GitHub Actions
+
+Three workflows drive CI:
+
+- **`build-sign-push.yml`** — on every push to `main`. Builds the AMD64 image natively on a GitHub-hosted `ubuntu-latest` runner and pushes `:dev-amd64` to Quay; also builds the ARM64 image on a self-hosted ARM64 runner and pushes `:dev-arm64`. The two jobs are fully independent (no shared runner, no emulation).
+- **`build-qcow2.yml`** (manual `workflow_dispatch`) — converts an AMD64 bootc image to a qcow2 disk and wraps it as a KubeVirt containerDisk, entirely on a native amd64 GitHub-hosted runner. It deliberately never passes `--platform` to `podman run`, even though the runner's arch already matches — doing so still routes the pull/run through Podman's cross-arch code path, which is what caused the original `no such container` failures against `registry.redhat.io/rhel10/bootc-image-builder`. It also pins the container storage driver up front and wipes any pre-seeded runner storage state, working around an upstream-documented driver-mismatch quirk on Ubuntu GitHub Actions runners.
+- **`promote-rhel10-bootc-prod`** (manual `workflow_dispatch`, self-hosted runner) — promotes a given source tag to `:prod` via `skopeo copy` (same digest, no rebuild), then signs it with keyless Cosign.
 
 Create these GitHub repository secrets:
 
@@ -61,16 +83,15 @@ Create these GitHub repository secrets:
 - `RHSM_ORG`
 - `RHSM_ACTIVATION_KEY`
 
-Create these GitHub repository variables:
+Create this GitHub repository variable (used by `promote-prod.yml`):
 
 - `QUAY_IMAGE=quay.io/waba/bootc-guide`
-- `TARGET_PLATFORM=linux/arm64` for Mac M4 / UTM ARM demo
 
-For GitHub-hosted runners, Linux runners are normally x86_64. For an ARM64 image that matches a Mac M4 / UTM ARM VM, use a self-hosted ARM64 runner or build locally on the Mac.
+The `build-arm64` job in `build-sign-push.yml` needs a self-hosted ARM64 runner (label `[self-hosted, ARM64]`) — adjust the label if yours differs. `promote-prod.yml` also expects a self-hosted runner.
 
 ## OpenShift Virtualization
 
-The `ansible/` and `gitops/openshift-virt/` directories extend the demo to a Single Node OpenShift cluster with OpenShift Virtualization.
+The `ansible/` and `gitops/openshift-virt/` directories extend the demo to a Single Node OpenShift cluster with OpenShift Virtualization. This path always uses the **AMD64** image/disk — the x86_64 SNO cluster can't run arm64.
 
 CDI (Containerized Data Importer) imports the VM disk from Quay using a **KubeVirt containerDisk** image — a `FROM scratch` OCI image with the qcow2 at `/disk/disk.qcow2`. This avoids the imagemode OCI format limitation in CDI's registry importer.
 
@@ -79,17 +100,23 @@ CDI (Containerized Data Importer) imports the VM disk from Quay using a **KubeVi
 pip install ansible kubernetes
 ansible-galaxy collection install -r ansible/requirements.yml
 
-# Build the containerDisk and push to Quay
-export IMAGE=quay.io/waba/bootc-guide:prod
-./scripts/local-qcow2.sh          # produces output/qcow2/disk.qcow2
-./scripts/local-push-disk.sh      # pushes :prod-disk to Quay
+# Build the AMD64 containerDisk and push :dev-disk-amd64 to Quay
+# (runs on a native amd64 GitHub-hosted runner, no cross-arch build)
+gh workflow run build-qcow2.yml \
+  --field image=quay.io/waba/bootc-guide:dev-amd64 \
+  --field output_ref=quay.io/waba/bootc-guide:dev-disk-amd64
+
+# Promote :dev-disk-amd64 -> :prod-disk-amd64 (same digest, skopeo copy)
+SOURCE_DISK=quay.io/waba/bootc-guide:dev-disk-amd64 \
+TARGET_DISK=quay.io/waba/bootc-guide:prod-disk-amd64 \
+  ./scripts/local-promote-disk.sh
 
 # Provision VM on SNO
 ansible-playbook ansible/provision-vm.yml \
-  -e disk_image=quay.io/waba/bootc-guide:prod-disk \
+  -e disk_image=quay.io/waba/bootc-guide:prod-disk-amd64 \
   -e "ssh_pub_key=\"$(cat ~/.ssh/id_ed25519.pub)\""
 
-# Upgrade VM after a new :prod image is promoted
+# Upgrade VM after a new :prod-amd64 image is promoted
 ansible-playbook ansible/upgrade-vm.yml
 ```
 
@@ -105,13 +132,8 @@ See [section 9 of the demo script](docs/demo-script.md#9-openshift-virtualizatio
 START_STEP=9a ./scripts/demo-run.sh
 ```
 
-Valid step IDs: `1 2 3 4 5 6 7a 7b 7c 7d 8 9a 9b`
+Valid step IDs: `1 2 2b 3 4 5 6 7a 7b 7c 7d 8 9a 9b`
 
-Pre-set variables in `scripts/demo-env.sh` (gitignored):
-```bash
-export IMAGE="quay.io/waba/bootc-guide:dev"
-export VM_SSH="demo@<vm-ip>"
-export SNO_API="https://api.your-cluster.example.com:6443"
-export SNO_TOKEN="$(oc whoami -t 2>/dev/null || true)"
-export DISK_IMAGE="quay.io/waba/bootc-guide:prod-disk"  # set to skip disk rebuild
-```
+Step 4 pushes the ARM64 image/signs it, then dispatches `build-qcow2.yml` in the background (and, on macOS, opens an iTerm2 pane tailing `disk-build.log`) so the AMD64 containerDisk build runs in parallel while the demo continues through steps 5–8. Step 9a assumes that background build has already completed.
+
+Copy `scripts/demo-env.sh.example` to `scripts/demo-env.sh` (gitignored) and fill in your values — it pre-sets the full ARM64/AMD64 variable set (`IMAGE_ARM`, `IMAGE_AMD`, `DISK_IMAGE_ARM`, `DISK_IMAGE_AMD`, their `PROD_*` counterparts, `VM_SSH`, `SNO_API`, `SNO_TOKEN`, etc.) and is sourced automatically by `demo-run.sh`.
