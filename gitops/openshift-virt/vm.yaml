@@ -60,6 +60,6 @@ spec:
           # the VM disk. bootc images are valid disk images in OCI format.
           # pullMethod: node uses the node's CRI to pull (faster than pod).
           registry:
-            url: quay.io/waba/bootc-guide:prod
+            url: docker://quay.io/waba/bootc-guide:prod-disk-amd64
             secretRef: quay-pull-secret
             pullMethod: node

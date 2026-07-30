@@ -684,6 +684,11 @@ if should_run "9a"; then
   note "PROD_DISK_IMAGE_AMD = ${PROD_DISK_IMAGE_AMD}  (containerDisk for CDI)"
 
   # ── 9a-i: Promote :dev-disk-amd64 → :prod-disk-amd64 ───────
+  until skopeo inspect docker://$DISK_IMAGE_AMD >/dev/null 2>&1
+  do
+    echo "Waiting for $DISK_IMAGE_AMD..."
+    sleep 15
+  done
   narrate "Step 9a-i: promote :dev-disk-amd64 → :prod-disk-amd64 via skopeo copy (same digest, new tag)"
   narrate "Mirrors the OS image promote: :dev-amd64 → :prod-amd64 — no rebuild, what was tested is what runs"
   pause "Press ENTER to promote :dev-disk-amd64 → :prod-disk-amd64..."

@@ -66,6 +66,12 @@ RUN echo 'demo:redhat' | chpasswd && \
 RUN systemctl enable httpd
 RUN echo "KEYMAP=dk-mac_nodeadkeys" > /etc/vconsole.conf
 
+RUN dnf remove -y \
+    kernel-debug \
+    kernel-debug-core \
+    kernel-debug-modules \
+    kernel-debug-modules-core || true
+
 RUN dnf clean all && \
     rm -rf /run/httpd /run/rhsm \
            /var/cache/dnf/* \
