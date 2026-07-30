@@ -109,10 +109,11 @@ podman run --rm --privileged \
   --config /config.toml \
   "${IMAGE_ARM}"
 
-# Fix ownership if anything came back root-owned (only matters on rootful
-# setups; on the normal rootless Mac path this is usually a no-op).
-if [[ "$(id -u)" -ne 0 ]] && command -v sudo &>/dev/null; then
-  sudo chown -R "$(id -u):$(id -g)" output 2>/dev/null || true
+# Only fix ownership under ./output if needed
+if [[ "$(id -u)" -ne 0 ]]; then
+  if find output ! -user "$(id -u)" -print -quit 2>/dev/null | grep -q .; then
+    sudo chown -R "$(id -u):$(id -g)" output
+  fi
 fi
 
 mv -f output/qcow2/disk.qcow2 output/qcow2/disk-arm.qcow2
