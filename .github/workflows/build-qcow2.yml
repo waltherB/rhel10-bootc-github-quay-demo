@@ -73,11 +73,11 @@ jobs:
           printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' | \
             sudo tee /etc/containers/storage.conf
 
-      - name: Setup Podman runtime directory
-        run: |
-          export XDG_RUNTIME_DIR=/tmp/podman-runtime
-          mkdir -p $XDG_RUNTIME_DIR
-          echo "XDG_RUNTIME_DIR=/tmp/podman-runtime" >> $GITHUB_ENV
+#      - name: Setup Podman runtime directory
+#        run: |
+#          export XDG_RUNTIME_DIR=/tmp/podman-runtime
+#          mkdir -p $XDG_RUNTIME_DIR
+#          echo "XDG_RUNTIME_DIR=/tmp/podman-runtime" >> $GITHUB_ENV
 
       - name: Show podman storage info
         run: sudo podman info
@@ -116,7 +116,7 @@ jobs:
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v /run/containers/storage:/run/containers/storage \
             -v /etc/containers/storage.conf:/etc/containers/storage.conf:ro \
-            -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+#            -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --config /config.toml \
