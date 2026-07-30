@@ -116,7 +116,6 @@ jobs:
             -v /var/lib/containers/storage:/var/lib/containers/storage \
             -v /run/containers/storage:/run/containers/storage \
             -v /etc/containers/storage.conf:/etc/containers/storage.conf:ro \
-#            -e XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
             registry.redhat.io/rhel10/bootc-image-builder:latest \
             --type qcow2 \
             --config /config.toml \
