@@ -443,7 +443,7 @@ narrate "CI builds both :dev-amd64 and its containerDisk (:dev-disk-amd64) seque
 # Use git status to safely check for any working tree changes (staged, unstaged, or untracked)
 if [ -n "$(git status --porcelain)" ]; then
   note "Local changes detected. Committing and pushing..."
-  run git commit -a -m "chore: push presentation progress to trigger CI"
+  run git commit -a -m "\"chore: push presentation progress to trigger CI\""
   run git push
 else
   note "No local changes detected."
@@ -470,12 +470,12 @@ else
       else
           # Stage and commit the change
           run git add files/motd
-          run git commit -m "chore: bump motd to ${MOTD_VERSION} to trigger CI"
+          run git commit -m "\"chore: bump motd to ${MOTD_VERSION} to trigger CI\""
           run git push
       fi
   fi
 fi
-
+fi
 # ────────────────────────────────────────────────────────────
 step "5" "GitHub Actions CI pipeline"
 # ────────────────────────────────────────────────────────────
