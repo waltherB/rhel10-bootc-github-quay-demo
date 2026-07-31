@@ -207,7 +207,10 @@ ascii() {
 run() {
   local cmd="$*"
   # Mask sensitive tokens/passwords in the display string
-  local masked_cmd=$(echo "$cmd" | sed -E 's/(--token=|--password=|--secret=|--key=)[^ ]+/\1********/g')
+  local masked_cmd
+  masked_cmd=$(echo "$cmd" | sed -E \
+    -e 's/(--token=|--password=|--secret=|--key=)[^ ]+/\1********/g' \
+    -e 's/(ssh_pub_key=")[^"]+/\1********/g')
 
   echo ""
   echo -e "${GREEN}  \$ $masked_cmd${RESET}"
