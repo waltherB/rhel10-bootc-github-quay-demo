@@ -109,9 +109,9 @@ jobs:
 
       - name: Debug storage
         run: |
-        sudo podman info
-        sudo ls -ld /var/lib/containers/storage
-        sudo ls -ld /run/containers/storage || true
+          sudo podman info
+          sudo ls -ld /var/lib/containers/storage
+          sudo ls -ld /run/containers/storage || true
 
       - name: Build qcow2
         run: |

@@ -434,43 +434,46 @@ if should_run "4"; then
   run "IMAGE_ARM=${IMAGE_ARM} ./scripts/local-push.sh"
   run "IMAGE=${IMAGE_ARM} ./scripts/local-sign-keyless.sh"
 
-  narrate "Pushing current git changes to main to trigger GitHub Actions CI..."
-  narrate "CI builds both :dev-amd64 and its containerDisk (:dev-disk-amd64) sequentially."
-  if ! git diff-index --quiet HEAD --; then
-    note "Local changes detected. Committing and pushing..."
-    run git commit -a -m "\"chore: push presentation progress to trigger CI\""
-    run git push
-  else
-    note "No local changes detected."
-    
-    # Check if we have commits that haven't been pushed
-    LOCAL_COMMITS=$(git log origin/main..HEAD 2>/dev/null)
-    if [ -n "$LOCAL_COMMITS" ]; then
-        note "Local commits exist. Pushing..."
-        run git push
-    else
-        note "No new commits to push. Making a change to files/motd to trigger CI..."
-              
-        # Update the motd with timestamp
-        MOTD_VERSION="v1-$(date +%F-%H%M%S)"
-        echo "RHEL 10 Image Mode Demo ${MOTD_VERSION}" > files/motd
-        
-        note "Updated files/motd to: ${MOTD_VERSION}"
-        run cat files/motd
-        
-        # Check if git is initialized and has a remote
-        if ! git remote -v | grep -q origin; then
-            note "No git remote configured. Skipping commit/push."
-        else
-            # Stage and commit the change
-            run git add files/motd
-            run git commit -m "\"chore: bump motd to ${MOTD_VERSION} to trigger CI\""
-            run git push
-        fi
-    fi
-  fi
+narrate "Pushing current git changes to main to trigger GitHub Actions CI..."
+narrate "CI builds both :dev-amd64 and its containerDisk (:dev-disk-amd64) sequentially."
 
-  pause
+# Use git status to safely check for any working tree changes (staged, unstaged, or untracked)
+if [ -n "$(git status --porcelain)" ]; then
+  note "Local changes detected. Committing and pushing..."
+  run git commit -a -m "chore: push presentation progress to trigger CI"
+  run git push
+else
+  note "No local changes detected."
+
+  # Append '|| true' so git log failure doesn't crash scripts running under set -e
+  LOCAL_COMMITS=$(git log origin/main..HEAD 2>/dev/null || true)
+  
+  if [ -n "$LOCAL_COMMITS" ]; then
+      note "Local commits exist. Pushing..."
+      run git push
+  else
+      note "No new commits to push. Making a change to files/motd to trigger CI..."
+            
+      # Update the motd with timestamp
+      MOTD_VERSION="v1-$(date +%F-%H%M%S)"
+      echo "RHEL 10 Image Mode Demo ${MOTD_VERSION}" > files/motd
+      
+      note "Updated files/motd to: ${MOTD_VERSION}"
+      run cat files/motd
+      
+      # Check if git is initialized and has a remote
+      if ! git remote -v | grep -q origin; then
+          note "No git remote configured. Skipping commit/push."
+      else
+          # Stage and commit the change
+          run git add files/motd
+          run git commit -m "chore: bump motd to ${MOTD_VERSION} to trigger CI"
+          run git push
+      fi
+  fi
+fi
+
+pause
 fi
 
 # ────────────────────────────────────────────────────────────
