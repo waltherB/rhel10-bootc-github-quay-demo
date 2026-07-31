@@ -435,7 +435,7 @@ if should_run "4"; then
   run "IMAGE=${IMAGE_ARM} ./scripts/local-sign-keyless.sh"
 
   narrate "Pushing current git changes to main to trigger GitHub Actions CI..."
-  narrate "CI builds :dev-amd64 natively on the runner — this is the image OpenShift will get"
+  narrate "CI builds both :dev-amd64 and its containerDisk (:dev-disk-amd64) sequentially."
   if ! git diff-index --quiet HEAD --; then
     note "Local changes detected. Committing and pushing..."
     run git commit -a -m "\"chore: push presentation progress to trigger CI\""
@@ -468,55 +468,8 @@ if should_run "4"; then
             run git push
         fi
     fi
-fi
+  fi
 
-  narrate "Starting AMD64 containerDisk conversion (:dev-disk-amd64) via GitHub Actions in the BACKGROUND"
-  note "This runs on a native amd64 GitHub-hosted runner against IMAGE_AMD — no cross-arch"
-  note "build anywhere in this path, so there's no risk of an arm64 disk reaching OpenShift."
-  note "This runs silently in the background so we can proceed to Step 5 immediately."
-
-  _DEV_BASE="${IMAGE_AMD%:*}"
-  _DEV_TAG="${IMAGE_AMD##*:}"
-  export DISK_IMAGE_AMD="${DISK_IMAGE_AMD:-${_DEV_BASE}:${_DEV_TAG}-disk}"
-
-  (
-    echo "=== ContainerDisk Build (GitHub Actions) Started at $(date) ===" > disk-build.log
-    if gh workflow run build-qcow2.yml \
-         --field image="${IMAGE_AMD}" \
-         --field output_ref="${DISK_IMAGE_AMD}" >> disk-build.log 2>&1; then
-      sleep 8
-      RUN_ID="$(gh run list --workflow=build-qcow2.yml --limit 1 --json databaseId --jq '.[0].databaseId')"
-      echo "Watching GitHub Actions run ${RUN_ID}..." >> disk-build.log
-      if gh run watch "${RUN_ID}" --exit-status >> disk-build.log 2>&1; then
-        echo "=== ContainerDisk Build and Push COMPLETED Successfully at $(date) ===" >> disk-build.log
-      else
-        echo "=== ContainerDisk Build FAILED at $(date). Check: gh run view ${RUN_ID} --log ===" >> disk-build.log
-      fi
-    else
-      echo "=== Failed to dispatch build-qcow2.yml at $(date) ===" >> disk-build.log
-    fi
-  ) &
-  
-  # Give the background process half a second to initialize the log file
-  sleep 1 
-
-  # --- OPTION: Automatically open an iTerm2 window to tail the progress ---
-  narrate "Spawning a new iTerm2 window to monitor the build progress..."
-  
-  # AppleScript to open a new iTerm window, CD to your current directory, and tail the log
- osascript <<EOF
-    tell application "iTerm"
-        tell current session of current window
-            -- Split vertically (use "split horizontally" if you prefer)
-            set newSession to split vertically with default profile
-            tell newSession
-                write text "cd '$(pwd)' && tail -f disk-build.log"
-            end tell
-        end tell
-    end tell
-EOF
-
-  note "Background build process spawned (PID: $!). Moving on..."
   pause
 fi
 
@@ -526,16 +479,14 @@ step "5" "GitHub Actions CI pipeline"
 if should_run "5"; then
   ascii "  ┌──────────────────┐   Build / Sign / Push   ┌──────────────────┐"
   ascii "  │ GitHub Runner    │ ──────────────────────► │ Quay Registry    │"
-  ascii "  │ (ubuntu-latest)  │   (native amd64)        │ (:dev-amd64)     │"
+  ascii "  │ (ubuntu-latest)  │   (native amd64)        │ (:dev-amd64 &    │"
+  ascii "  │                  │                         │  :dev-disk-amd64)│"
   ascii "  └──────────────────┘                         └──────────────────┘"
   echo ""
-  narrate "Every push to main triggers: build → smoke test → push :dev → sign → verify"
-  narrate "Only git tags (v*) create a versioned tag – no dev-SHA clutter in Quay"
-  manual "Open GitHub → Actions → build-sign-push-rhel10-bootc and show the running workflow"
-  manual "Point out: build job, smoke test, Quay push, Cosign sign, Cosign verify"
-  note "The qcow2 disk conversion kicked off in Step 4 (build-qcow2.yml) is running"
-  note "in parallel on a separate native-amd64 runner — check disk-build.log or the"
-  note "iTerm tail window for its progress."
+  narrate "Every push to main triggers: build OS image → build qcow2 → build containerDisk → push both to Quay"
+  manual "Open GitHub → Actions → 'Build, Sign, and Push bootc (AMD64 & ARM64)' and show the running workflow"
+  manual "Point out: build job, storage config, Quay push, Cosign sign, and the containerDisk push"
+  note "The single consolidated pipeline avoids any race conditions or duplicate builds."
   pause "Press ENTER once the workflow is green..."
 fi
 
