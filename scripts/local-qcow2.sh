@@ -8,7 +8,7 @@ TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
 # silently produce a disk that boots nowhere useful (and won't get renamed
 # to disk-amd.qcow2 below, masking the mistake). Refuse instead of guessing.
 if [[ "$TARGET_PLATFORM" != "linux/amd64" ]]; then
-  echo "❌ TARGET_PLATFORM=$TARGET_PLATFORM, but this demo's VM/KubeVirt target is amd64 only." >&2
+  echo "TARGET_PLATFORM=$TARGET_PLATFORM, but this demo's VM/KubeVirt target is amd64 only." >&2
   echo "   Unset TARGET_PLATFORM (or set it to linux/amd64) and re-run." >&2
   exit 1
 fi
