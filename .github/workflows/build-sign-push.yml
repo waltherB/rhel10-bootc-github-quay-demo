@@ -58,6 +58,7 @@ jobs:
         run: |
           sudo podman build \
             --platform linux/amd64 \
+            --build-arg DEMO_PUB_KEY="${{ secrets.DEMO_PUB_KEY }}"
             --build-arg RHSM_ORG="${{ secrets.RHSM_ORG }}" \
             --build-arg RHSM_ACTIVATION_KEY="${{ secrets.RHSM_ACTIVATION_KEY }}" \
             --build-arg DEMO_PUB_KEY="$(cat ~/.ssh/${VM_SSH_KEY}.pub 2>/dev/null || echo '')" \
