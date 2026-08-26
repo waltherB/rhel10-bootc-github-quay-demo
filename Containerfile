@@ -34,6 +34,11 @@ RUN set -ex; \
       sudo \
       selinux-policy-targeted \
       qemu-guest-agent \
+      python3-pip \
+      python3-devel \
+      git \
+      libffi-devel \
+      openssl-devel \
       policycoreutils --nogpgcheck; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
