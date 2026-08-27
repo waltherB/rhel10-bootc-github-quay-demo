@@ -1,4 +1,9 @@
 #!/usr/bin/env bash
+# Re-exec under Bash when the script is invoked explicitly with sh.
+if [ -z "${BASH_VERSION:-}" ]; then
+  exec bash "$0" "$@"
+fi
+
 # ============================================================
 #  RHEL 10 bootc Demo – presenter runner
 #  Usage: ./scripts/demo-run.sh [START_STEP]
