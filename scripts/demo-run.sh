@@ -356,7 +356,7 @@ if should_run "1"; then
   echo ""
   pause
   narrate "Containerfile"
-  run ls -1
+  run tree -C --gitignore
   echo ""
   run less Containerfile
   pause
