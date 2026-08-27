@@ -7,7 +7,7 @@ podman run --rm -d -p 8080:80 --name bootc-test "$IMAGE"
 
 echo "Waiting for httpd to be ready..."
 for i in {1..15}; do
-  if curl -fsS http://127.0.0.1:8080 | | lynx -stdin -dump; then
+  if curl -fsS http://127.0.0.1:8080 | lynx -stdin -dump; then
     break
   fi
   echo "  attempt ${i}/15 failed, retrying in 2s..."
