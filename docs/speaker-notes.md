@@ -33,6 +33,29 @@ Image Mode helps shift this toward:
 - Operational rollback
 - Better standardization
 
+## Why Immutable Images and Containers Matter
+
+An immutable image is a defined version of the operating system. We do not treat
+the running host as a place to make uncontrolled, permanent changes. When the
+system needs to change, we build and deploy a new image version instead.
+
+Containers use the same model: the image is built once, promoted through the
+pipeline and run consistently in each environment. The container or VM can be
+replaced, but the image remains the traceable source of its state.
+
+This matters because it gives us:
+
+- **Consistency:** development, test and production use the same built artifact.
+- **Reduced drift:** changes are made in source and rebuilt, rather than applied
+	differently to individual machines.
+- **Safer operations:** updates can be tested and staged before reboot or rollout.
+- **Fast recovery:** a failed update can return to a known-good image.
+- **Traceability:** we can connect the running system to a specific image digest,
+	source change and build pipeline.
+
+Immutability does not mean the system can never change. It means changes are
+intentional, versioned and delivered through a controlled lifecycle.
+
 ## Demo Step: Repository
 
 What I say:
@@ -49,6 +72,10 @@ What I say:
 
 The Containerfile is where we define the intended operating system state. This can include packages, files, services and configuration.
 
+This is the important difference from manually configuring a server: the
+Containerfile describes the desired image, while the running system is treated
+as a deployed version of that image.
+
 Customer value:
 
 This enables standard operating system baselines, golden images and consistent deployment patterns.
@@ -62,6 +89,10 @@ Now we build the operating system image. This is similar to how application team
 Customer value:
 
 The same governance patterns used for applications can now be applied to the OS layer.
+
+The image is the immutable handoff between build and runtime. Once it is built
+and tested, the same artifact can be promoted instead of rebuilding or manually
+recreating the system in each environment.
 
 ## Demo Step: Quay
 
@@ -103,6 +134,10 @@ Customer value:
 
 This makes change handling more predictable and easier to test before production.
 
+We are replacing the system with a new declared version, not accumulating an
+unknown set of package changes on the existing host. That is how immutability
+reduces drift over time.
+
 ## Demo Step: Rollback
 
 What I say:
@@ -112,6 +147,9 @@ If the new state is not good, we roll back to the previous known-good image.
 Customer value:
 
 Rollback becomes operationally simple and part of the lifecycle design.
+
+Because the previous image remains a known-good version, recovery does not
+depend on remembering which individual packages or configuration files changed.
 
 ## Audience-Specific Angles
 

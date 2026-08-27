@@ -354,9 +354,11 @@ if should_run "1"; then
   narrate "GitHub Actions builds, tests, signs, and pushes to Quay"
   narrate "Ansible provisions VMs on OpenShift Virtualization"
   echo ""
+  pause
+  narrate "Containerfile"
   run ls -1
   echo ""
-  run cat Containerfile
+  run less Containerfile
   pause
 fi
 
