@@ -104,7 +104,6 @@ jobs:
           COPY disk-amd64.qcow2 /disk/disk.qcow2
           EOF
           sudo podman build \
-            --no-cache \
             -f ctxdir/Containerfile \
             -t ${{ env.DISK_IMAGE_AMD }} \
             ctxdir

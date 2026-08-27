@@ -45,8 +45,11 @@ if ! podman image exists "${IMAGE_ARM}"; then
   exit 1
 fi
 
-# bootc-image-builder itself DOES come from a registry — that pull is fine.
-podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+# bootc-image-builder itself comes from a registry. Reuse the local copy when
+# the builder is already available on the Podman machine.
+if ! podman image exists registry.redhat.io/rhel10/bootc-image-builder:latest; then
+  podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+fi
 
 mkdir -p output
 
@@ -128,7 +131,6 @@ EOF
 
 podman build -q \
   --platform "${PLATFORM}" \
-  --no-cache \
   -f ctxdir/Containerfile \
   -t "${DISK_IMAGE_ARM}" \
   ctxdir

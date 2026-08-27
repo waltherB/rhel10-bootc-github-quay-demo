@@ -62,7 +62,6 @@ echo "  Building containerDisk image..."
 # but CDI on x86 OpenShift expects an amd64-compatible image manifest
 podman build -q \
   --platform linux/amd64 \
-  --no-cache \
   -f "${TMPDIR}/Containerfile" \
   -t "${DISK_IMAGE}" \
   "${REPO_ROOT}/output/qcow2"
