@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Run this INSIDE the VM to pull the latest :prod image and reboot into it.
+# Run this INSIDE the VM to pull the latest image reference recorded by bootc
+# (the UTM VM normally tracks :dev-arm64) and reboot into it.
 set -euo pipefail
 
 run_sudo() {

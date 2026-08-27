@@ -510,8 +510,8 @@ if should_run "6"; then
   echo ""
   narrate "The promote workflow uses skopeo copy – same digest, just a new tag"
   narrate "No rebuild – what was tested is exactly what goes to prod"
-  manual "Open GitHub → Actions → promote-rhel10-bootc-prod → Run workflow (source_tag: dev)"
-  pause "Press ENTER once :prod is promoted..."
+  manual "The AMD64 image is promoted by GitHub Actions with source_tag: dev-amd64"
+  pause "Press ENTER once :prod-amd64 is promoted..."
 fi
 
 # ────────────────────────────────────────────────────────────
@@ -520,7 +520,7 @@ step "7a" "Make a visible change to trigger a live update demo"
 if should_run "7a"; then
   ascii "  ┌──────────────────┐    git commit & push    ┌──────────────────┐"
   ascii "  │ Update files/motd│ ──────────────────────► │ GitHub Actions   │"
-  ascii "  │ (Version bump)   │                         │ (Rebuild & Push) │"
+  ascii "  │ (Version bump)   │                         │ (Local ARM64)   │"
   ascii "  └──────────────────┘                         └──────────────────┘"
   echo ""
   narrate "Change the motd so the update is obvious on the VM after reboot"
@@ -532,10 +532,9 @@ if should_run "7a"; then
   run git diff --cached -- files/motd
   run git commit -m "\"chore: bump motd to ${MOTD_VERSION} for live update demo\""
   run git push
-  narrate "CI is now building the new image – go to GitHub Actions to show it"
-  manual "Open GitHub → Actions and watch the new build run"
-  manual "Open GitHub → Actions → promote-rhel10-bootc-prod → Run workflow (source_tag: dev)"
-  pause "Press ENTER once the new :dev is built and promoted to :prod..."
+  narrate "The GitHub push records the change; rebuild the ARM64 image locally for the UTM VM"
+  manual "Run ./scripts/local-build.sh, then ./scripts/local-push.sh to publish :dev-arm64"
+  pause "Press ENTER once the new :dev-arm64 image is pushed to Quay..."
 fi
 
 # ────────────────────────────────────────────────────────────
@@ -561,10 +560,10 @@ step "7c" "Pull and apply the update on the VM"
 if should_run "7c"; then
   ascii "  ┌──────────────────┐    ssh vm-upgrade       ┌─────────────────────┐"
   ascii "  │ Quay Registry    │ ◄────────────────────── │ UTM Virtual Machine │"
-  ascii "  │ (:prod-arm64)    │   (bootc upgrade)       │ (Staged & Reboot)   │"
+  ascii "  │ (:dev-arm64)     │   (bootc upgrade)       │ (Staged & Reboot)   │"
   ascii "  └──────────────────┘                         └─────────────────────┘"
   echo ""
-  narrate "bootc upgrade pulls the new :dev layers and stages them"
+  narrate "bootc upgrade pulls the new :dev-arm64 layers and stages them"
   narrate "The running OS is untouched until reboot – atomic, safe rollback point preserved"
   pause "Press ENTER to trigger vm-upgrade (will reboot the VM)..."
   run ssh -tt ${SSH_OPTIONS} "${VM_SSH}" vm-upgrade || true
