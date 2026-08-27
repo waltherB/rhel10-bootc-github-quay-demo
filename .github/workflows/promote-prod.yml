@@ -4,9 +4,9 @@ on:
   workflow_dispatch:
     inputs:
       source_tag:
-        description: "Existing source tag to promote, for example dev or v1.0.0"
+        description: "Existing AMD64 source tag to promote, for example dev-amd64 or v1.0.0"
         required: true
-        default: "dev"
+        default: "dev-amd64"
 
 permissions:
   contents: read
@@ -40,7 +40,7 @@ jobs:
         run: |
           skopeo copy \
             docker://${IMAGE}:${{ github.event.inputs.source_tag }} \
-            docker://${IMAGE}:prod
+            docker://${IMAGE}:prod-amd64
 
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -55,4 +55,4 @@ jobs:
         env:
           COSIGN_YES: "true"
         run: |
-          cosign sign "${IMAGE}:prod"
+          cosign sign "${IMAGE}:prod-amd64"
