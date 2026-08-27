@@ -41,6 +41,7 @@ RUN set -ex; \
       libffi-devel \
       openssl-devel \
       policycoreutils --nogpgcheck; \
+    dnf update -y  \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
         subscription-manager unregister || true; \
