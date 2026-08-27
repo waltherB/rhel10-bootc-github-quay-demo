@@ -63,6 +63,7 @@ RUN systemd-sysusers && mkdir -p /var/home/demo && chown demo:demo /var/home/dem
 RUN echo 'demo:redhat' | chpasswd && \
     echo 'demo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/demo && \
     chmod 0440 /etc/sudoers.d/demo && \
+  test -n "$DEMO_PUB_KEY" && \
     install -d -m 0755 /home/demo/.ssh && \
     printf '%s\n' "$DEMO_PUB_KEY" > /home/demo/.ssh/authorized_keys && \
     chown -R demo:demo /home/demo/.ssh && \

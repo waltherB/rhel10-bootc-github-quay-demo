@@ -56,12 +56,15 @@ jobs:
       # PHASE 1: Build the AMD64 OS container image
       - name: Build bootc AMD64 Container Image
         run: |
+          if [ -z "${{ secrets.DEMO_PUB_KEY }}" ]; then
+            echo "ERROR: DEMO_PUB_KEY secret is not set!"
+            exit 1
+          fi
           sudo podman build \
             --platform linux/amd64 \
             --build-arg DEMO_PUB_KEY="${{ secrets.DEMO_PUB_KEY }}" \
             --build-arg RHSM_ORG="${{ secrets.RHSM_ORG }}" \
             --build-arg RHSM_ACTIVATION_KEY="${{ secrets.RHSM_ACTIVATION_KEY }}" \
-            --build-arg DEMO_PUB_KEY="$(cat ~/.ssh/${VM_SSH_KEY}.pub 2>/dev/null || echo '')" \
             -t ${{ env.IMAGE_AMD }} \
             -f Containerfile .
 
