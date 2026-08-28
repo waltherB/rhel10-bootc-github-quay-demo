@@ -19,6 +19,13 @@ export DISK_IMAGE_ARM="${QUAY_REPO}:dev-disk-arm64"
 export PROD_IMAGE_ARM="${QUAY_REPO}:prod-arm64"
 export PROD_DISK_IMAGE_ARM="${QUAY_REPO}:prod-disk-arm64"
 
+# Images and disk used by the M5/UTM demo scenario.
+export IMAGE_GOOD="${QUAY_REPO}:demo-v1-arm64"
+export IMAGE_UPDATE="${QUAY_REPO}:demo-v2-arm64"
+export IMAGE_BROKEN="${QUAY_REPO}:demo-broken-arm64"
+export IMAGE_FIXED="${QUAY_REPO}:demo-v3-fixed-arm64"
+export DISK_IMAGE_GOOD="${QUAY_REPO}:demo-v1-disk-arm64"
+
 # ── Remote (AMD64) — built natively on GitHub-hosted ubuntu runners,
 #    used for OpenShift Virtualization (x86_64 SNO cluster) ──
 export TARGET_PLATFORM_REMOTE="linux/amd64"
@@ -31,6 +38,8 @@ export PROD_DISK_IMAGE_AMD="${QUAY_REPO}:prod-disk-amd64"
 # Leave empty to clone the public recipe automatically during preparation.
 export AI_LAB_RECIPES_DIR=""
 export CHATBOT_PORT="8501"
+# Set to 0 when refreshing child images without rebuilding the UTM disk.
+export BUILD_UTM_DISK="1"
 
 export VM_SSH="demo@192.168.64.9"
 export VM_SSH_KEY="${HOME}/.ssh/id_ed25519"

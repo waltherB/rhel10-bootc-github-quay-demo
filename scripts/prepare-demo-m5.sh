@@ -16,12 +16,14 @@ fi
 : "${IMAGE_UPDATE:=${QUAY_REPO}:demo-v2-arm64}"
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
+: "${DISK_IMAGE_GOOD:=${QUAY_REPO}:demo-v1-disk-arm64}"
 : "${SOURCE_IMAGE_ARM:=${IMAGE_ARM:-${QUAY_REPO}:dev-arm64}}"
 : "${ADD_CHATBOT:=1}"
 : "${AI_LAB_RECIPES_DIR:=}"
 : "${CHATBOT_PORT:=8501}"
 : "${PUSH_IMAGES:=1}"
 : "${REBUILD_GOOD:=1}"
+: "${BUILD_UTM_DISK:=1}"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -74,6 +76,14 @@ if [[ "${REBUILD_GOOD}" == "1" ]] || ! podman image exists "${IMAGE_GOOD}"; then
   podman tag "${SOURCE_IMAGE_ARM}" "${IMAGE_GOOD}"
 else
   echo "==> Reusing existing ${IMAGE_GOOD}"
+fi
+
+if [[ "${BUILD_UTM_DISK}" == "1" ]]; then
+  echo "==> Building UTM ARM64 qcow2 from ${IMAGE_GOOD}"
+  (cd "${REPO_DIR}" && \
+    IMAGE_ARM="${IMAGE_GOOD}" \
+    DISK_IMAGE_ARM="${DISK_IMAGE_GOOD}" \
+    ./scripts/local-build-qcow2.sh)
 fi
 
 cat > "${TMP_DIR}/update/Containerfile" <<EOF
@@ -137,4 +147,4 @@ echo
 echo "Prepared images:"
 printf '  %s\n' "${IMAGE_GOOD}" "${IMAGE_UPDATE}" "${IMAGE_BROKEN}" "${IMAGE_FIXED}"
 echo
-echo "Next: create or refresh the UTM ARM64 VM disk from ${IMAGE_GOOD}."
+echo "UTM disk: ${DISK_IMAGE_GOOD} (output/qcow2/disk-arm.qcow2)"
