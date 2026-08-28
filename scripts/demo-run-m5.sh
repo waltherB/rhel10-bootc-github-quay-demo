@@ -18,8 +18,9 @@ fi
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
 : "${VM_SSH:=demo@192.168.64.9}"
 : "${VM_SSH_KEY:=${HOME}/.ssh/id_ed25519}"
-: "${VM_REBOOT_TIMEOUT:=90}"
+: "${VM_REBOOT_TIMEOUT:=240}"
 : "${RUN_SNO_EXTENSION:=0}"
+: "${RUN_FLEET_EXTENSION:=1}"
 
 BOLD='\033[1m'
 CYAN='\033[1;36m'
@@ -67,14 +68,30 @@ remote() {
 
 wait_for_vm() {
   local elapsed=0
+  note "Waiting for ${VM_SSH} to accept SSH (up to ${VM_REBOOT_TIMEOUT}s)..."
+
+  # A reboot command can return before sshd has stopped. Require one failed
+  # connection first, otherwise we may mistake the old boot for the new one.
+  while (( elapsed < VM_REBOOT_TIMEOUT )); do
+    if ! remote true >/dev/null 2>&1; then
+      break
+    fi
+    ((elapsed += 5))
+    sleep 5
+  done
+
   while (( elapsed < VM_REBOOT_TIMEOUT )); do
     if remote true >/dev/null 2>&1; then
+      note "VM is reachable again after ${elapsed}s."
       return 0
     fi
-    sleep 5
     ((elapsed += 5))
+    sleep 5
+    if (( elapsed % 30 == 0 )); then
+      note "Still waiting for VM reboot (${elapsed}/${VM_REBOOT_TIMEOUT}s)..."
+    fi
   done
-  echo -e "${RED}  VM did not become reachable within ${VM_REBOOT_TIMEOUT}s.${RESET}" >&2
+  echo -e "${RED}  VM did not become reachable within ${VM_REBOOT_TIMEOUT}s. The reboot may still be in progress; check UTM and retry the SSH check.${RESET}" >&2
   return 1
 }
 
@@ -168,8 +185,19 @@ run remote sudo bootc status
 run remote curl -fsS http://localhost
 pause
 
+if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
+  step 8 "One repository update, many VM deployments"
+  say "The tested image can be applied to a fleet using the same target reference."
+  say "The default is plan-only; no additional VMs are required for this demo."
+  note "Example fleet: demo-web-01 (.19) demo-web-02 (.20) demo-web-03 (.21) demo-web-04 (.22)"
+  run env IMAGE_UPDATE="${IMAGE_FIXED}" \
+    VM_TARGETS="demo@192.168.64.19 demo@192.168.64.20 demo@192.168.64.21 demo@192.168.64.22" \
+    FLEET_APPLY=0 ./scripts/demo-fleet-update-m5.sh
+  pause "Press ENTER to continue..."
+fi
+
 if [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
-  step 8 "Optional: the same model on OpenShift Virtualization"
+  step 9 "Optional: the same model on OpenShift Virtualization"
   say "The local demo used ARM64 in UTM; the SNO extension uses a prebuilt AMD64 image."
   say "OpenShift manages the VM platform while bootc manages the guest OS lifecycle."
   note "Show the prepared VirtualMachine, its DataVolume, and bootc status over SSH."

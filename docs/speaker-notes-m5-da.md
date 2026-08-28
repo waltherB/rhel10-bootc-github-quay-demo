@@ -121,7 +121,31 @@ Forklar den realistiske proces:
 De images, der bruges live, er forberedt på forhånd for at undgå ventetid på
 package- og disk-builds.
 
-## 8. OpenShift Virtualization-extension
+## 8. Mange VM'er fra samme repository-opdatering
+
+Efter den fungerende version kan vi løfte blikket fra én VM til en hel flåde.
+Alle VM'er kan følge samme image-reference, og den samme testede image-version
+kan stages på flere systemer uden individuelle image-builds.
+
+Kør den planlagte fleet-kommando og vis for eksempel:
+
+```text
+demo-web-01 (192.168.64.19) -> bootc switch demo-v3-fixed-arm64
+demo-web-02 (192.168.64.20) -> bootc switch demo-v3-fixed-arm64
+demo-web-03 (192.168.64.21) -> bootc switch demo-v3-fixed-arm64
+demo-web-04 (192.168.64.22) -> bootc switch demo-v3-fixed-arm64
+```
+
+Sig:
+
+> Den vigtige forskel på pets og cattle er ikke, at vi aldrig har flere hosts.
+> Det er, at hosts ikke længere kræver hver sin manuelle behandling.
+
+I denne lokale demo er fleet-visningen plan-only. I et rigtigt miljø sættes
+`FLEET_APPLY=1`, og `VM_TARGETS` indeholder de faktiske SSH-targets. Reboots kan
+derefter styres af en change window eller en automation-platform.
+
+## 9. OpenShift Virtualization-extension
 
 Denne del er kort og kan udelades, hvis hoveddemoen har brug for ekstra tid.
 
