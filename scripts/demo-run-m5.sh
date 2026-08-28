@@ -46,6 +46,7 @@ step() {
   echo -e "${CYAN}  STEP $1: $2${RESET}"
   echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
   echo
+  pause "Press ENTER to start step $1..."
 }
 
 say() {

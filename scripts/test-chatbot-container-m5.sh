@@ -32,8 +32,15 @@ echo
 echo "Container is running. Inspect it in Podman Desktop."
 echo "Published endpoint: http://localhost:${CHATBOT_PORT}"
 echo
+echo "Pod containers:"
+podman ps --filter "pod=${CHATBOT_NAME}" --format '  {{.ID}}  {{.Names}}  {{.Status}}'
+echo
 echo "Container logs:"
-podman pod logs "${CHATBOT_NAME}" || true
+while IFS= read -r container_id; do
+  [[ -n "${container_id}" ]] || continue
+  echo "--- ${container_id} ---"
+  podman logs "${container_id}" || true
+done < <(podman ps --filter "pod=${CHATBOT_NAME}" --format '{{.ID}}')
 echo
 echo "Stop with ENTER when the chatbot has been tested."
 read -r
