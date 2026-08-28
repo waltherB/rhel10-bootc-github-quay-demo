@@ -16,6 +16,7 @@ fi
 : "${IMAGE_UPDATE:=${QUAY_REPO}:demo-v2-arm64}"
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
+: "${SOURCE_IMAGE_ARM:=${IMAGE_ARM:-${QUAY_REPO}:dev-arm64}}"
 : "${PUSH_IMAGES:=1}"
 : "${REBUILD_GOOD:=1}"
 
@@ -44,7 +45,14 @@ trap 'rm -rf "${TMP_DIR}"' EXIT
 
 if [[ "${REBUILD_GOOD}" == "1" ]] || ! podman image exists "${IMAGE_GOOD}"; then
   echo "==> Building ${IMAGE_GOOD} from the repository Containerfile"
-  (cd "${REPO_DIR}" && IMAGE_ARM="${IMAGE_GOOD}" ./scripts/local-build.sh)
+  (cd "${REPO_DIR}" && ./scripts/local-build.sh)
+  if ! podman image exists "${SOURCE_IMAGE_ARM}"; then
+    echo "ERROR: expected local baseline image was not built: ${SOURCE_IMAGE_ARM}" >&2
+    exit 1
+  fi
+  # local-build.sh sources demo-env.sh, so preserve its configured source tag
+  # and create the lifecycle tag used by this scenario explicitly.
+  podman tag "${SOURCE_IMAGE_ARM}" "${IMAGE_GOOD}"
 else
   echo "==> Reusing existing ${IMAGE_GOOD}"
 fi
