@@ -17,10 +17,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Preserve explicit command-line environment overrides while loading defaults.
+IMAGE_ARM_OVERRIDE="${IMAGE_ARM-}"
+IMAGE_ARM_WAS_SET="${IMAGE_ARM+x}"
+DISK_IMAGE_ARM_OVERRIDE="${DISK_IMAGE_ARM-}"
+DISK_IMAGE_ARM_WAS_SET="${DISK_IMAGE_ARM+x}"
+PLATFORM_OVERRIDE="${TARGET_PLATFORM_LOCAL-}"
+PLATFORM_WAS_SET="${TARGET_PLATFORM_LOCAL+x}"
 if [[ -f "${SCRIPT_DIR}/demo-env.sh" ]]; then
   # shellcheck source=/dev/null
   source "${SCRIPT_DIR}/demo-env.sh"
 fi
+
+if [[ -n "${IMAGE_ARM_WAS_SET}" ]]; then IMAGE_ARM="${IMAGE_ARM_OVERRIDE}"; fi
+if [[ -n "${DISK_IMAGE_ARM_WAS_SET}" ]]; then DISK_IMAGE_ARM="${DISK_IMAGE_ARM_OVERRIDE}"; fi
+if [[ -n "${PLATFORM_WAS_SET}" ]]; then TARGET_PLATFORM_LOCAL="${PLATFORM_OVERRIDE}"; fi
 
 IMAGE_ARM="${IMAGE_ARM:-quay.io/waba/bootc-guide:dev-arm64}"
 DISK_IMAGE_ARM="${DISK_IMAGE_ARM:-quay.io/waba/bootc-guide:dev-disk-arm64}"
