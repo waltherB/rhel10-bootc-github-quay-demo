@@ -69,7 +69,38 @@ deployments.
 VM'en er nu en rigtig RHEL-server. Image Mode ændrer ikke de almindelige
 driftsværktøjer; det ændrer livscyklussen for OS'et.
 
-## 4. Deploy en opdatering
+## 4. Test AI Lab Recipes-containeren først
+
+Sæt `CHATBOT_IMAGE` til den præcise image-reference fra den valgte AI Lab
+Recipes-opskrift. Kør containeren først separat med Podman og vis den i Podman
+Desktop sammen med logs, port og image metadata.
+
+Sig:
+
+> Før vi gør chatbotten til en del af operativsystemets deployment, tester vi
+> den som en almindelig container. Det gør fejlsøgning og godkendelse hurtigere.
+
+Testen bruger `localhost:8081` som standard. Porten kan ændres i
+`demo-env.sh`, hvis recipe-containeren lytter på en anden intern port.
+
+## 5. Deploy chatbotten med bootc
+
+Den næste image-version indeholder chatbotten som en systemd Quadlet. Quadlet-
+filen beskriver containeren deklarativt, og systemd starter den sammen med VM'en.
+
+Vis:
+
+```bash
+sudo bootc status
+sudo systemctl status chatbot.service
+```
+
+Sig:
+
+> Vi går fra en manuel container-test til en reproducerbar image-definition.
+> Alle VM'er, der får den nye image-version, får samme containeropsætning.
+
+## 6. Deploy en opdatering
 
 Kør `bootc switch` til den nye webpage-version og genstart VM'en.
 
@@ -81,7 +112,7 @@ Sig:
 Vis den nye webside og `bootc status`. Peg på, at den tidligere deployment stadig
 kan genkendes som rollback-version.
 
-## 5. Vis en kontrolleret fejl
+## 7. Vis en kontrolleret fejl
 
 Skift til `demo-broken-arm64`. Denne version har med vilje en fejl, eksempelvis
 at HTTPD ikke er enabled.
@@ -93,7 +124,7 @@ Vigtigt budskab:
 > Immutable betyder ikke fejlfri. Det betyder, at fejlen er knyttet til en
 > bestemt image-version, og at vi kan gå tilbage til den tidligere tilstand.
 
-## 6. Rollback
+## 8. Rollback
 
 Kør:
 
@@ -108,7 +139,7 @@ Sig:
 > Recovery afhænger ikke af, at vi husker alle manuelle ændringer. Den tidligere
 > deployment er et kendt image, som allerede er gemt på systemet.
 
-## 7. Deploy rettelsen
+## 9. Deploy rettelsen
 
 Skift til `demo-v3-fixed-arm64`, genstart og vis websiden.
 
@@ -121,7 +152,7 @@ Forklar den realistiske proces:
 De images, der bruges live, er forberedt på forhånd for at undgå ventetid på
 package- og disk-builds.
 
-## 8. Mange VM'er fra samme repository-opdatering
+## 10. Mange VM'er fra samme repository-opdatering
 
 Efter den fungerende version kan vi løfte blikket fra én VM til en hel flåde.
 Alle VM'er kan følge samme image-reference, og den samme testede image-version
@@ -145,7 +176,7 @@ I denne lokale demo er fleet-visningen plan-only. I et rigtigt miljø sættes
 `FLEET_APPLY=1`, og `VM_TARGETS` indeholder de faktiske SSH-targets. Reboots kan
 derefter styres af en change window eller en automation-platform.
 
-## 9. OpenShift Virtualization-extension
+## 11. OpenShift Virtualization-extension
 
 Denne del er kort og kan udelades, hvis hoveddemoen har brug for ekstra tid.
 

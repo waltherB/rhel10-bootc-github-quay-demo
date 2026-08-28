@@ -27,6 +27,11 @@ export DISK_IMAGE_AMD="${QUAY_REPO}:dev-disk-amd64"
 export PROD_IMAGE_AMD="${QUAY_REPO}:prod-amd64"
 export PROD_DISK_IMAGE_AMD="${QUAY_REPO}:prod-disk-amd64"
 
+# AI Lab Recipes chatbot recipe used by the Quadlet update demo.
+# Leave empty to clone the public recipe automatically during preparation.
+export AI_LAB_RECIPES_DIR=""
+export CHATBOT_PORT="8501"
+
 export VM_SSH="demo@192.168.64.9"
 export VM_SSH_KEY="${HOME}/.ssh/id_ed25519"
 export VM_USER="demo"

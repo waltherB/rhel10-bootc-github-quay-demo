@@ -17,6 +17,9 @@ fi
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
 : "${SOURCE_IMAGE_ARM:=${IMAGE_ARM:-${QUAY_REPO}:dev-arm64}}"
+: "${ADD_CHATBOT:=1}"
+: "${AI_LAB_RECIPES_DIR:=}"
+: "${CHATBOT_PORT:=8501}"
 : "${PUSH_IMAGES:=1}"
 : "${REBUILD_GOOD:=1}"
 
@@ -41,7 +44,23 @@ if [[ "$(uname -m)" != "arm64" ]]; then
 fi
 
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "${TMP_DIR}"' EXIT
+trap 'rm -rf "${TMP_DIR}" "${AI_LAB_RECIPES_TMP_DIR:-}"' EXIT
+
+mkdir -p "${TMP_DIR}/update" "${TMP_DIR}/broken" "${TMP_DIR}/fixed"
+
+if [[ "${ADD_CHATBOT}" == "1" ]]; then
+  command -v git >/dev/null 2>&1 || { echo "ERROR: git is required for the AI Lab recipe." >&2; exit 1; }
+  if [[ -z "${AI_LAB_RECIPES_DIR}" ]]; then
+    AI_LAB_RECIPES_TMP_DIR="$(mktemp -d)"
+    git clone --depth 1 https://github.com/containers/ai-lab-recipes.git "${AI_LAB_RECIPES_TMP_DIR}"
+    AI_LAB_RECIPES_DIR="${AI_LAB_RECIPES_TMP_DIR}"
+  fi
+  RECIPE_DIR="${AI_LAB_RECIPES_DIR}/recipes/natural_language_processing/chatbot"
+  [[ -d "${RECIPE_DIR}" ]] || { echo "ERROR: chatbot recipe not found: ${RECIPE_DIR}" >&2; exit 1; }
+  command -v make >/dev/null 2>&1 || { echo "ERROR: make is required for the AI Lab recipe." >&2; exit 1; }
+  make -C "${RECIPE_DIR}" quadlet
+  cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${RECIPE_DIR}/build/chatbot.image" "${TMP_DIR}/update/"
+fi
 
 if [[ "${REBUILD_GOOD}" == "1" ]] || ! podman image exists "${IMAGE_GOOD}"; then
   echo "==> Building ${IMAGE_GOOD} from the repository Containerfile"
@@ -57,11 +76,10 @@ else
   echo "==> Reusing existing ${IMAGE_GOOD}"
 fi
 
-mkdir -p "${TMP_DIR}/update" "${TMP_DIR}/broken" "${TMP_DIR}/fixed"
-
 cat > "${TMP_DIR}/update/Containerfile" <<EOF
 FROM ${IMAGE_GOOD}
 COPY index.html /var/www/html/index.html
+COPY chatbot.kube chatbot.yaml chatbot.image /usr/share/containers/systemd/
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v2"
 EOF
 

@@ -35,6 +35,7 @@ RUN set -ex; \
       sudo \
       selinux-policy-targeted \
       qemu-guest-agent \
+      podman \
       python3-pip \
       python3-devel \
       git \

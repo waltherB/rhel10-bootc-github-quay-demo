@@ -16,6 +16,9 @@ fi
 : "${IMAGE_UPDATE:=${QUAY_REPO}:demo-v2-arm64}"
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
+: "${CHATBOT_PORT:=8501}"
+: "${RUN_CHATBOT_EXTENSION:=1}"
+: "${AI_LAB_RECIPES_DIR:=}"
 : "${VM_SSH:=demo@192.168.64.9}"
 : "${VM_SSH_KEY:=${HOME}/.ssh/id_ed25519}"
 : "${VM_REBOOT_TIMEOUT:=240}"
@@ -107,6 +110,7 @@ show_config() {
   note "UPDATE = ${IMAGE_UPDATE}"
   note "BROKEN = ${IMAGE_BROKEN}"
   note "FIXED  = ${IMAGE_FIXED}"
+  note "AI chatbot = AI Lab Recipes chatbot (localhost:${CHATBOT_PORT})"
   note "UTM VM = ${VM_SSH}"
   note "All images and the ARM64 qcow2 disk must be prepared before the demo."
 }
@@ -143,50 +147,72 @@ run podman stop bootc-demo-test
 step 3 "Inspect the running UTM VM"
 say "Now the same image model is running as a full RHEL VM."
 run remote sudo bootc status
-run remote curl -fsS http://localhost
+run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
 
-step 4 "Deploy a new image"
+step 4 "Test the AI chatbot pod as containers"
+say "We test the AI Lab Recipes container before putting it in the OS image."
+say "Podman Desktop can show the container, logs, port and image metadata here."
+if [[ "${RUN_CHATBOT_EXTENSION}" == "1" ]]; then
+  run env AI_LAB_RECIPES_DIR="${AI_LAB_RECIPES_DIR}" \
+    CHATBOT_PORT="${CHATBOT_PORT}" \
+    ./scripts/test-chatbot-container-m5.sh
+else
+  note "RUN_CHATBOT_EXTENSION=0; skipping chatbot test."
+fi
+
+step 5 "Deploy the chatbot through a bootc update"
+say "The next image contains the chatbot as a systemd Quadlet."
+say "The container is now part of the image definition and starts with the VM."
+if [[ "${RUN_CHATBOT_EXTENSION}" != "1" ]]; then
+  note "RUN_CHATBOT_EXTENSION=0; skipping chatbot deployment."
+else
+  run remote sudo bootc switch "${IMAGE_UPDATE}"
+  run remote sudo bootc status
+  pause "The chatbot image is staged. Press ENTER to reboot the VM..."
+  run remote sudo systemctl reboot || true
+  wait_for_vm
+  run remote sudo bootc status
+  run remote sudo systemctl --no-pager --full status chatbot.service || true
+  note "The chatbot should be available on the VM's port ${CHATBOT_PORT}."
+fi
+
+step 6 "Inspect the updated VM"
 say "A workload change is delivered as a new image, not as manual host changes."
-run remote sudo bootc switch "${IMAGE_UPDATE}"
 run remote sudo bootc status
-pause "The update is staged. Press ENTER to reboot the VM..."
-run remote sudo systemctl reboot || true
-wait_for_vm
-run remote sudo bootc status
-run remote curl -fsS http://localhost
+run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
 
-step 5 "Deploy a deliberately broken version"
+step 7 "Deploy a deliberately broken version"
 say "This version contains a known mistake: the HTTP service is not enabled."
 say "The failure makes rollback visible and gives the audience a real recovery path."
 run remote sudo bootc switch "${IMAGE_BROKEN}"
 run remote sudo systemctl reboot || true
 wait_for_vm
 run remote sudo systemctl --no-pager --full status httpd || true
-run remote curl -fsS http://localhost || true
+run remote curl -fsS http://localhost | lynx -stdin -dump || true
 run remote sudo bootc status
 pause
 
-step 6 "Rollback to the known-good deployment"
+step 8 "Rollback to the known-good deployment"
 say "bootc keeps the previous deployment as a rollback target."
 run remote sudo bootc rollback --apply || true
 wait_for_vm
 run remote sudo bootc status
-run remote curl -fsS http://localhost
+run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
 
-step 7 "Deploy the fixed image"
+step 9 "Deploy the fixed image"
 say "The fix is built once, tested, and delivered as a new image version."
 run remote sudo bootc switch "${IMAGE_FIXED}"
 run remote sudo systemctl reboot || true
 wait_for_vm
 run remote sudo bootc status
-run remote curl -fsS http://localhost
+run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
 
 if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
-  step 8 "One repository update, many VM deployments"
+  step 10 "One repository update, many VM deployments"
   say "The tested image can be applied to a fleet using the same target reference."
   say "The default is plan-only; no additional VMs are required for this demo."
   note "Example fleet: demo-web-01 (.19) demo-web-02 (.20) demo-web-03 (.21) demo-web-04 (.22)"
@@ -197,7 +223,7 @@ if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
 fi
 
 if [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
-  step 9 "Optional: the same model on OpenShift Virtualization"
+  step 11 "Optional: the same model on OpenShift Virtualization"
   say "The local demo used ARM64 in UTM; the SNO extension uses a prebuilt AMD64 image."
   say "OpenShift manages the VM platform while bootc manages the guest OS lifecycle."
   note "Show the prepared VirtualMachine, its DataVolume, and bootc status over SSH."
