@@ -75,6 +75,10 @@ RUN echo 'demo:redhat' | chpasswd && \
     chmod 0600 /home/demo/.ssh/authorized_keys
 
 RUN systemctl enable httpd
+RUN mkdir -p /etc/NetworkManager/conf.d && \
+    printf '%s\n' '[main]' 'dns=none' > /etc/NetworkManager/conf.d/99-dns.conf && \
+    printf '%s\n' 'nameserver 1.1.1.1' 'nameserver 8.8.8.8' > /etc/resolv.conf && \
+    chmod 0644 /etc/resolv.conf
 RUN echo "KEYMAP=dk-mac_nodeadkeys" > /etc/vconsole.conf
 
 RUN dnf remove -y \

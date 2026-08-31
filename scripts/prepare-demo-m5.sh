@@ -35,7 +35,7 @@ require_command() {
 build_child() {
   local image="$1"
   local context="$2"
-  podman build --platform linux/arm64 -t "${image}" "${context}"
+  podman build --no-cache --platform linux/arm64 -t "${image}" "${context}"
 }
 
 require_command podman
