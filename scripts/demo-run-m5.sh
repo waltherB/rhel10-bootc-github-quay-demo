@@ -24,6 +24,7 @@ fi
 : "${VM_REBOOT_TIMEOUT:=240}"
 : "${RUN_SNO_EXTENSION:=0}"
 : "${RUN_FLEET_EXTENSION:=1}"
+: "${FLEET_APPLY:=0}"
 
 BOLD='\033[1m'
 CYAN='\033[1;36m'
@@ -174,7 +175,9 @@ else
   run remote sudo systemctl reboot || true
   wait_for_vm
   run remote sudo bootc status
+  run remote sudo systemctl daemon-reload
   run remote sudo systemctl --no-pager --full status chatbot.service || true
+  run remote sudo systemctl list-unit-files --all | grep -Ei 'chatbot|llamacpp' || true
   note "The chatbot should be available on the VM's port ${CHATBOT_PORT}."
 fi
 
@@ -219,7 +222,7 @@ if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
   note "Example fleet: demo-web-01 (.19) demo-web-02 (.20) demo-web-03 (.21) demo-web-04 (.22)"
   run env IMAGE_UPDATE="${IMAGE_FIXED}" \
     VM_TARGETS="demo@192.168.64.19 demo@192.168.64.20 demo@192.168.64.21 demo@192.168.64.22" \
-    FLEET_APPLY=0 ./scripts/demo-fleet-update-m5.sh
+    FLEET_APPLY="${FLEET_APPLY}" ./scripts/demo-fleet-update-m5.sh
   pause "Press ENTER to continue..."
 fi
 

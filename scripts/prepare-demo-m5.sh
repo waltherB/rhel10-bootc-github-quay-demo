@@ -61,6 +61,12 @@ if [[ "${ADD_CHATBOT}" == "1" ]]; then
   [[ -d "${RECIPE_DIR}" ]] || { echo "ERROR: chatbot recipe not found: ${RECIPE_DIR}" >&2; exit 1; }
   command -v make >/dev/null 2>&1 || { echo "ERROR: make is required for the AI Lab recipe." >&2; exit 1; }
   make -C "${RECIPE_DIR}" quadlet
+  for artifact in chatbot.kube chatbot.yaml chatbot.image; do
+    [[ -s "${RECIPE_DIR}/build/${artifact}" ]] || {
+      echo "ERROR: AI Lab Recipes did not generate ${artifact}." >&2
+      exit 1
+    }
+  done
   cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${RECIPE_DIR}/build/chatbot.image" "${TMP_DIR}/update/"
 fi
 
