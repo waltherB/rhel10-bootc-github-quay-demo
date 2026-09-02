@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  Build the ARM64 qcow2 disk image locally, natively, via
-#  bootc-image-builder — mirrors what build-qcow2.yml does for
+#  bootc-image-builder — mirrors what build-sign-push.yml does for
 #  AMD64 on GitHub Actions, but runs on-Mac with no emulation
 #  since the Mac and the source image are both arm64.
 #
@@ -17,10 +17,21 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Preserve explicit command-line environment overrides while loading defaults.
+IMAGE_ARM_OVERRIDE="${IMAGE_ARM-}"
+IMAGE_ARM_WAS_SET="${IMAGE_ARM+x}"
+DISK_IMAGE_ARM_OVERRIDE="${DISK_IMAGE_ARM-}"
+DISK_IMAGE_ARM_WAS_SET="${DISK_IMAGE_ARM+x}"
+PLATFORM_OVERRIDE="${TARGET_PLATFORM_LOCAL-}"
+PLATFORM_WAS_SET="${TARGET_PLATFORM_LOCAL+x}"
 if [[ -f "${SCRIPT_DIR}/demo-env.sh" ]]; then
   # shellcheck source=/dev/null
   source "${SCRIPT_DIR}/demo-env.sh"
 fi
+
+if [[ -n "${IMAGE_ARM_WAS_SET}" ]]; then IMAGE_ARM="${IMAGE_ARM_OVERRIDE}"; fi
+if [[ -n "${DISK_IMAGE_ARM_WAS_SET}" ]]; then DISK_IMAGE_ARM="${DISK_IMAGE_ARM_OVERRIDE}"; fi
+if [[ -n "${PLATFORM_WAS_SET}" ]]; then TARGET_PLATFORM_LOCAL="${PLATFORM_OVERRIDE}"; fi
 
 IMAGE_ARM="${IMAGE_ARM:-quay.io/waba/bootc-guide:dev-arm64}"
 DISK_IMAGE_ARM="${DISK_IMAGE_ARM:-quay.io/waba/bootc-guide:dev-disk-arm64}"
@@ -45,10 +56,12 @@ if ! podman image exists "${IMAGE_ARM}"; then
   exit 1
 fi
 
-# bootc-image-builder itself comes from a registry. Reuse the local copy when
-# the builder is already available on the Podman machine.
-if ! podman image exists registry.redhat.io/rhel10/bootc-image-builder:latest; then
-  podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+# bootc-image-builder itself comes from a registry. Reuse the local copy only
+# when it has the same architecture as the local UTM build.
+BUILDER_ARCH="${PLATFORM#*/}"
+if [[ "$(podman image inspect registry.redhat.io/rhel10/bootc-image-builder:latest \
+  --format '{{.Architecture}}' 2>/dev/null || true)" != "${BUILDER_ARCH}" ]]; then
+  podman pull --platform "${PLATFORM}" registry.redhat.io/rhel10/bootc-image-builder:latest
 fi
 
 mkdir -p output
@@ -101,6 +114,7 @@ echo "  GraphRoot: ${GRAPHROOT}"
 # keeps the inner container's view of locks consistent with the host's.
 # As a last, non-destructive resort: podman system renumber
 podman run --rm --privileged \
+  --platform "${PLATFORM}" \
   --pull=never \
   --security-opt label=type:unconfined_t \
   -v "$(pwd)/config/config.toml:/config.toml:ro" \

@@ -1,6 +1,64 @@
 # RHEL 10 Image Mode Demo – GitHub Actions + Quay + OpenShift Virtualization
 
-Demo repo for building, signing and deploying a RHEL 10 bootc / Image Mode image.
+# RHEL 10 Image Mode Demo: Overblik og Præsentation
+
+Dette repository demonstrerer en moderne, image-baseret livscyklusstyring for operativsystemer (OS), der erstatter traditionel, manuel serveradministration.
+
+**Målgruppe:** (Tilpas efter publikum: Linux-drift, OpenShift/K8s, Arkitekter, Ledelse)
+**Hovedbudskab:** Operativsystemet skal behandles som et versionsstyret, reproducerbart artefakt, der kan rulles tilbage.
+
+---
+
+## 🚀 Præsentationsresume (Hvad vi viser)
+
+Denne demo følger en klar, lineær fortælling, der kan bruges direkte i en PowerPoint-præsentation:
+
+1.  **Problemet (Slide 1):** Traditionel drift fører til konfigurationsdrift, uensartethed og dårlig sporbarhed.
+2.  **Løsningen (Slide 2):** Vi introducerer *Immutable Images* – OS'et som et versionsstyret artefakt.
+3.  **Arkitekturen (Slide 3):** Vi gennemgår de 5 nøglekomponenter:
+    *   **Kildekode:** Sandhedskilden (Repository).
+    *   **Definition:** Deklarerer tilstanden (Containerfile).
+    *   **Bygning:** Skaber det immutable artefakt (Build).
+    *   **Distribution:** Centralt, versionsstyret lager (Quay Registry).
+    *   **Runtime:** Kører artefaktet (QCOW2 / VM).
+4.  **Live Demo (Slide 4):** Vi gennemgår hele flowet:
+    *   **Build:** Kører `local-build.sh` for at skabe et ARM64 image.
+    *   **Push & Sign:** Pusher og signerer artefaktet til Quay.
+    *   **VM Provisioning:** Starter en VM fra det nye image.
+    *   **Opdatering & Rollback:** Simulerer en opdatering til en ny version og demonstrerer en øjeblikkelig, kontrolleret rollback til den forrige, kendte tilstand.
+
+---
+
+## ⚙️ Teknisk Overblik (For dybdegående sektioner)
+
+### 1. Arkitektur og Platformer
+Demoen understøtter to fuldstændigt separate, native stier for at undgå emulering:
+*   **ARM64 (Local):** Kører på MacBook Pro M4 via `local-build.sh` og UTM.
+*   **AMD64 (CI):** Kører på GitHub-hosted runners og OpenShift Virtualization (x86_64).
+
+### 2. Nøgleworkflows
+*   **Local Flow (ARM64):** `local-build.sh` $\rightarrow$ `local-push.sh` $\rightarrow$ `local-sign-keyless.sh` $\rightarrow$ `local-build-qcow2.sh`.
+*   **CI Flow (AMD64):** `build-sign-push.yml` (Bygger og pusher) $\rightarrow$ `build-qcow2.yml` (Konverterer til VM-disk).
+*   **Promotion:** `promote-rhel10-bootc-prod` sikrer, at `:prod` altid har samme digest som `:dev`.
+
+### 3. OpenShift Virtualization (KubeVirt)
+Vi udvider demoen til at vise, hvordan CDI importerer VM-disken (`.qcow2`) fra Quay ved hjælp af et specialiseret `FROM scratch` OCI image. Dette er den mest avancerede del og viser integrationen med et enterprise-platform.
+
+## 🛠️ Opsætning og Kørsel
+
+**For at køre demoen:**
+1.  Klon repository'et.
+2.  Følg `scripts/demo-env.sh.example` for at sætte miljøvariabler.
+3.  Kør `scripts/demo-run.sh` for en komplet, automatiseret gennemgang.
+
+**Vigtigt:**
+*   **Secrets:** Sørg for at opsætte GitHub Secrets (`QUAY_USERNAME`, `QUAY_TOKEN`, etc.) og GitHub Variables (`QUAY_IMAGE`).
+*   **Præstation:** For at sikre, at demoen kører fejlfrit, skal man være opmærksom på, at ARM64 og AMD64 stierne er *native* og aldrig krydskompileres.
+
+## 📚 Yderligere Dokumentation
+*   [Speaker Notes (DA)](docs/speaker-notes-da.md): Detaljeret manuskript til præsentationen.
+*   [OpenShift Virtualization Guide](docs/openShift-virtualization-extension.md): Dybdegående guide til OpenShift-integrationen.
+*   [Live Demo Checklist](docs/live-demo-checklist.md): Tjekliste til at sikre, at alle trin er dækket.
 
 For a full step-by-step walkthrough — local build, CI pipeline, VM provisioning, live OS update, and rollback — see the [demo script](docs/demo-script.md).
 

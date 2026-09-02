@@ -35,6 +35,7 @@ RUN set -ex; \
       sudo \
       selinux-policy-targeted \
       qemu-guest-agent \
+      podman \
       python3-pip \
       python3-devel \
       git \
@@ -74,6 +75,25 @@ RUN echo 'demo:redhat' | chpasswd && \
     chmod 0600 /home/demo/.ssh/authorized_keys
 
 RUN systemctl enable httpd
+
+# Configure DNS to use Cloudflare (1.1.1.1) and Google (8.8.8.8)
+# Both /etc/resolv.conf and NetworkManager configuration for persistence
+RUN mkdir -p /etc/NetworkManager/conf.d && \
+    mkdir -p /etc/systemd/resolved.conf.d && \
+    printf '%s\n' \
+      '[main]' \
+      'dns=systemd-resolved' \
+      'dhcp=dhclient' > /etc/NetworkManager/conf.d/99-dns.conf && \
+    printf '%s\n' \
+      '[Resolve]' \
+      'DNS=1.1.1.1 8.8.8.8' \
+      'FallbackDNS=1.1.1.1 8.8.8.8' \
+      'DNSSECNegativeTrustAnchors=' > /etc/systemd/resolved.conf.d/99-dns.conf && \
+    printf '%s\n' \
+      'nameserver 1.1.1.1' \
+      'nameserver 8.8.8.8' > /etc/resolv.conf && \
+    chmod 0644 /etc/resolv.conf
+
 RUN echo "KEYMAP=dk-mac_nodeadkeys" > /etc/vconsole.conf
 
 RUN dnf remove -y \
