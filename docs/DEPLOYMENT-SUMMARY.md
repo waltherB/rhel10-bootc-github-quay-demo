@@ -73,8 +73,7 @@ I've created a complete deployment solution for deploying the RHEL 10 bootc AMD6
 - **Recommendation:** No changes needed
 
 **GitHub Actions Workflows:**
-- ✅ `build-sign-push.yml` — Builds & signs `:dev-*` and `:prod-*` tags
-- ✅ `build-qcow2.yml` — Converts bootc image to containerDisk
+- ✅ `build-sign-push.yml` — Builds and signs `:dev-*`; builds the AMD64 bootc image and containerDisk on GitHub's native AMD64 runner
 - ✅ `promote-rhel10-bootc-prod` — Promotes images with digest preservation
 - **Recommendation:** No changes needed
 
@@ -132,7 +131,7 @@ I've created a complete deployment solution for deploying the RHEL 10 bootc AMD6
 
 ### With GitHub Actions:
 - ✅ Expects images built by `build-sign-push.yml`
-- ✅ Expects containerDisk built by `build-qcow2.yml`
+- ✅ Expects containerDisk built by `build-sign-push.yml`
 - ✅ Works with images promoted by `promote-rhel10-bootc-prod`
 
 ### With Local Build Scripts:
@@ -146,9 +145,9 @@ I've created a complete deployment solution for deploying the RHEL 10 bootc AMD6
 
 | Tag | Built By | Used By | Status |
 |-----|----------|---------|--------|
-| `:dev-amd64` | `build-sign-push.yml` | `build-qcow2.yml`, deployment script | ✅ Verified |
+| `:dev-amd64` | `build-sign-push.yml` | deployment script | ✅ Verified |
 | `:prod-amd64` | `promote-rhel10-bootc-prod` | Upgrade playbook | ✅ Verified |
-| `:dev-disk-amd64` | `build-qcow2.yml` | Deployment script, ansible playbook | ✅ Verified |
+| `:dev-disk-amd64` | `build-sign-push.yml` | Deployment script, ansible playbook | ✅ Verified |
 | `:prod-disk-amd64` | `local-promote-disk.sh` | Deployment script, ansible playbook | ✅ Verified |
 | `:dev-arm64` | `local-build.sh` (local MAC) | Local testing | ✅ Verified |
 | `:dev-disk-arm64` | `local-build-qcow2.sh` (local MAC) | UTM local testing | ✅ Verified |

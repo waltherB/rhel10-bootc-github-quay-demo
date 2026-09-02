@@ -28,8 +28,8 @@ Before running the deployment, ensure you have:
 
 ### Quay Registry
 - **AMD64 bootc image:** `:dev-amd64` or `:prod-amd64`
-- **AMD64 containerDisk image:** `:dev-disk-amd64` or `:prod-disk-amd64`
-  - **Note:** The containerDisk is a `FROM scratch` OCI image with the qcow2 at `/disk/disk.qcow2`. It's built by the `.github/workflows/build-qcow2.yml` GitHub Actions workflow.
+- **AMD64 containerDisk image:** `:dev-disk-amd64` or `:prod-disk-amd64` (built by `build-sign-push.yml` on GitHub Actions)
+  - **Note:** The containerDisk is a `FROM scratch` OCI image with the qcow2 at `/disk/disk.qcow2`. It's built by the `.github/workflows/build-sign-push.yml` GitHub Actions workflow on a native AMD64 runner.
 
 ### Cluster Requirements
 - OpenShift Virtualization (KubeVirt) enabled on your SNO cluster
@@ -152,7 +152,7 @@ sudo bootc status
 
 - **AMD64 containerDisk image** (`quay.io/waba/bootc-guide:dev-disk-amd64` or `:prod-disk-amd64`)
   - A `FROM scratch` OCI image containing the qcow2 at `/disk/disk.qcow2`.
-  - Built by `.github/workflows/build-qcow2.yml` (manual dispatch, native AMD64 runner).
+  - Built by `.github/workflows/build-sign-push.yml` (push to `main` or manual dispatch, native AMD64 runner).
   - Promotion to `:prod-disk-amd64` happens via `scripts/local-promote-disk.sh` (skopeo copy, same digest).
 
 **Kubernetes Resources:**
@@ -298,15 +298,12 @@ oc delete namespace bootc-vms
 The deployment workflow fits into a larger CI/CD pipeline:
 
 ### Build Phase (GitHub Actions)
-1. **`.github/workflows/build-sign-push.yml`** (every push to `main`)
-   - Builds and pushes `:dev-amd64` image
-   - Signs with keyless Cosign
-
-2. **`.github/workflows/build-qcow2.yml`** (manual dispatch)
-   - Converts `:dev-amd64` → `:dev-disk-amd64` (containerDisk)
+1. **`.github/workflows/build-sign-push.yml`** (push to `main` or manual dispatch)
+  - Builds and pushes `:dev-amd64` and `:dev-disk-amd64` on a native AMD64 runner
+  - Signs with keyless Cosign
 
 ### Promotion Phase (GitHub Actions)
-3. **`promote-rhel10-bootc-prod`** (manual dispatch)
+2. **`promote-rhel10-bootc-prod`** (manual dispatch)
    - Promotes `:dev-amd64` → `:prod-amd64` (same digest, skopeo copy)
    - Promotes `:dev-disk-amd64` → `:prod-disk-amd64` (same digest, skopeo copy)
 
@@ -327,7 +324,7 @@ The Ansible playbooks and deployment script are designed to work with consistent
 | Phase | Image | Tag | Source |
 |-------|-------|-----|--------|
 | **Development** | AMD64 bootc | `:dev-amd64` | `.github/workflows/build-sign-push.yml` |
-| **Development** | AMD64 containerDisk | `:dev-disk-amd64` | `.github/workflows/build-qcow2.yml` |
+| **Development** | AMD64 containerDisk | `:dev-disk-amd64` | `.github/workflows/build-sign-push.yml` |
 | **Production** | AMD64 bootc | `:prod-amd64` | `promote-rhel10-bootc-prod` (same digest) |
 | **Production** | AMD64 containerDisk | `:prod-disk-amd64` | `scripts/local-promote-disk.sh` (same digest) |
 

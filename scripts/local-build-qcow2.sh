@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  Build the ARM64 qcow2 disk image locally, natively, via
-#  bootc-image-builder — mirrors what build-qcow2.yml does for
+#  bootc-image-builder — mirrors what build-sign-push.yml does for
 #  AMD64 on GitHub Actions, but runs on-Mac with no emulation
 #  since the Mac and the source image are both arm64.
 #

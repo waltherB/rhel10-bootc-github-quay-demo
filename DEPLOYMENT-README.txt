@@ -53,7 +53,7 @@ Deployment Scripts:
 
 GitHub Actions Workflows:
 ✅ build-sign-push.yml (:dev-* and :prod-* builds) — CORRECT
-✅ build-qcow2.yml (bootc to containerDisk) — CORRECT
+✅ build-sign-push.yml (AMD64 bootc and containerDisk) — CORRECT
 ✅ promote-rhel10-bootc-prod (digest-preserving promotion) — CORRECT
 
 🎯 QUICK START
@@ -83,7 +83,7 @@ GitHub Actions Workflows:
 
 Development (Built on every commit):
   :dev-amd64              → GitHub Actions build-sign-push.yml
-  :dev-disk-amd64         → GitHub Actions build-qcow2.yml
+   :dev-disk-amd64         → GitHub Actions build-sign-push.yml
   :dev-arm64              → Local MacBook M4 build
   :dev-disk-arm64         → Local MacBook M4 qcow2
 
@@ -123,10 +123,10 @@ Step 2: GitHub Actions build-sign-push.yml
    ├─ Builds & pushes :dev-arm64 (self-hosted ARM64 runner)
    └─ Signs with keyless Cosign
    ↓
-Step 3: GitHub Actions build-qcow2.yml (manual dispatch)
-   ├─ Input: image=quay.io/waba/bootc-guide:dev-amd64
-   ├─ Output: :dev-disk-amd64 (containerDisk)
-   └─ (Produced on native AMD64 runner)
+Step 3: GitHub Actions build-sign-push.yml
+   ├─ Builds :dev-amd64 (native AMD64 runner)
+   ├─ Builds :dev-disk-amd64 (containerDisk)
+   └─ (Produced on native AMD64 runner; never on the MacBook)
    ↓
 Step 4: promote-rhel10-bootc-prod (manual dispatch)
    ├─ :dev-amd64 → :prod-amd64 (skopeo copy, same digest)

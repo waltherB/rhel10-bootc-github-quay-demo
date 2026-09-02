@@ -182,8 +182,7 @@ Complete index of all documentation for the RHEL 10 bootc OpenShift Virtualizati
 ## 🔗 Cross-References
 
 ### Image Build & Promotion
-- GitHub Actions: `.github/workflows/build-sign-push.yml` (builds :dev-* tags)
-- GitHub Actions: `.github/workflows/build-qcow2.yml` (builds containerDisk)
+- GitHub Actions: `.github/workflows/build-sign-push.yml` (builds :dev-* tags, including the AMD64 containerDisk)
 - GitHub Actions: `.github/workflows/promote-rhel10-bootc-prod` (promotes to :prod-*)
 - Script: `scripts/local-promote-disk.sh` (manual promotion option)
 

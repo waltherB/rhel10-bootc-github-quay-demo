@@ -4,6 +4,14 @@ IMAGE="${IMAGE:-quay.io/waba/bootc-guide:dev}"
 # Default to amd64 for cross-architecture builds from arm64 Mac
 TARGET_PLATFORM="${TARGET_PLATFORM:-linux/amd64}"
 
+# AMD64 disk images must be built by build-sign-push.yml on GitHub's native
+# AMD64 runner; do not send them through Podman's emulation layer on Apple Silicon.
+if [[ "$(uname -m)" == "arm64" && "$TARGET_PLATFORM" == "linux/amd64" ]]; then
+  echo "ERROR: AMD64 qcow2 images cannot be built locally on an ARM64 Mac." >&2
+  echo "Run .github/workflows/build-sign-push.yml on GitHub Actions instead." >&2
+  exit 1
+fi
+
 # The KubeVirt/SNO target is x86_64 only. Building anything else here would
 # silently produce a disk that boots nowhere useful (and won't get renamed
 # to disk-amd.qcow2 below, masking the mistake). Refuse instead of guessing.

@@ -44,25 +44,46 @@ build_child() {
 build_ocpvirt_disk() {
   local image="$1"
   local disk_image="$2"
+  local branch
+  local run_id
 
-  if ! podman image exists "${image}"; then
-    echo "==> Pulling ${image} for OCP Virt disk refresh"
-    podman pull "${image}"
+  branch="$(git -C "${REPO_DIR}" branch --show-current)"
+  if [[ -z "${branch}" ]]; then
+    echo "ERROR: cannot dispatch build-sign-push.yml from a detached HEAD." >&2
+    echo "Check out the branch containing the AMD64 build changes first." >&2
+    exit 1
   fi
 
-  echo "==> Building OCP Virt qcow2 containerDisk for ${image} -> ${disk_image}"
-  (cd "${REPO_DIR}" && \
-    IMAGE="${image}" \
-    TARGET_PLATFORM="linux/amd64" \
-    ./scripts/local-qcow2.sh)
+  echo "==> Dispatching build-sign-push.yml for branch ${branch}"
+  gh workflow run build-sign-push.yml --ref "${branch}"
 
-  (cd "${REPO_DIR}" && \
-    IMAGE="${image}" \
-    DISK_IMAGE="${disk_image}" \
-    ./scripts/local-push-disk.sh)
+  run_id="$(gh run list \
+    --workflow build-sign-push.yml \
+    --branch "${branch}" \
+    --event workflow_dispatch \
+    --limit 1 \
+    --json databaseId \
+    --jq '.[0].databaseId')"
+  if [[ -z "${run_id}" ]]; then
+    echo "ERROR: could not find the dispatched build-sign-push.yml run." >&2
+    exit 1
+  fi
+
+  echo "==> Waiting for GitHub Actions run ${run_id}"
+  gh run watch "${run_id}" --exit-status
+
+  echo "==> Checking for AMD64 OCP Virt disk produced by build-sign-push.yml"
+  if ! skopeo inspect "docker://${disk_image}" >/dev/null 2>&1; then
+    echo "ERROR: AMD64 disk image not found: ${disk_image}" >&2
+    echo "The workflow completed, but did not publish the expected disk tag." >&2
+    echo "Expected ${disk_image}, built from ${image}." >&2
+    exit 1
+  fi
 }
 
 require_command podman
+require_command skopeo
+require_command gh
 
 if [[ "$(uname -m)" != "arm64" ]]; then
   echo "ERROR: run this preparation script on an ARM64 Mac, not ${HOSTTYPE:-unknown}." >&2

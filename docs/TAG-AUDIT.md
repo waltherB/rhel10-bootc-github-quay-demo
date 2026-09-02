@@ -12,7 +12,7 @@ This document verifies that all Ansible playbooks, deployment scripts, and GitHu
 |-----------|-----|---------|---------|
 | Bootc Image | `:dev-amd64` | `.github/workflows/build-sign-push.yml` | Development build from every push to `main` |
 | Bootc Image | `:prod-amd64` | `promote-rhel10-bootc-prod` workflow | Production build (promoted, same digest) |
-| ContainerDisk | `:dev-disk-amd64` | `.github/workflows/build-qcow2.yml` | Development disk image for OpenShift Virt |
+| ContainerDisk | `:dev-disk-amd64` | `.github/workflows/build-sign-push.yml` | Development disk image for OpenShift Virt |
 | ContainerDisk | `:prod-disk-amd64` | `scripts/local-promote-disk.sh` | Production disk image (promoted, same digest) |
 
 ### ARM64 (Local Demo Only)
@@ -113,6 +113,7 @@ TARGET_DISK="${TARGET_DISK:-...}"  # e.g., quay.io/waba/bootc-guide:prod-disk-am
 
 **Builds & Tags:**
 - Builds `:dev-amd64` (AMD64, GitHub-hosted runner)
+- Builds `:dev-disk-amd64` containerDisk (same native AMD64 runner)
 - Builds `:dev-arm64` (ARM64, self-hosted runner)
 - Pushes and signs with keyless Cosign
 
@@ -120,23 +121,6 @@ TARGET_DISK="${TARGET_DISK:-...}"  # e.g., quay.io/waba/bootc-guide:prod-disk-am
 - ✅ Uses `:dev-*` tags for development builds
 - ✅ Native builds (no cross-arch emulation)
 - ✅ Runs on every push to `main`
-
-**Recommendations:**
-- ✅ No changes needed.
-
----
-
-### ✅ `.github/workflows/build-qcow2.yml`
-
-**Builds & Tags:**
-- Input: `image` (e.g., `:dev-amd64` or `:prod-amd64`)
-- Output: `output_ref` (e.g., `:dev-disk-amd64` or `:prod-disk-amd64`)
-- Produces containerDisk (FROM scratch with qcow2 at `/disk/disk.qcow2`)
-
-**Analysis:**
-- ✅ Takes a bootc image and converts to containerDisk
-- ✅ No cross-arch build (native AMD64 runner)
-- ✅ Manual dispatch (triggered on demand)
 
 **Recommendations:**
 - ✅ No changes needed.
@@ -170,10 +154,8 @@ TARGET_DISK="${TARGET_DISK:-...}"  # e.g., quay.io/waba/bootc-guide:prod-disk-am
    ├─ Builds & pushes :dev-arm64 (self-hosted ARM64 runner)
    └─ Signs both with keyless Cosign
    ↓
-3. Manual: build-qcow2.yml (dispatch)
-   ├─ Input: image=quay.io/waba/bootc-guide:dev-amd64
-   ├─ Output: output_ref=quay.io/waba/bootc-guide:dev-disk-amd64
-   └─ Produces containerDisk (FROM scratch)
+3. build-sign-push.yml completes the AMD64 containerDisk build
+   └─ Produces :dev-disk-amd64 (FROM scratch) on GitHub Actions
    ↓
 4. Manual: promote-rhel10-bootc-prod (dispatch)
    ├─ Promotes :dev-amd64 → :prod-amd64 (skopeo copy)
@@ -193,7 +175,7 @@ TARGET_DISK="${TARGET_DISK:-...}"  # e.g., quay.io/waba/bootc-guide:prod-disk-am
    ↓
 2. Wait for :dev-amd64 to build & sign
    ↓
-3. Manual: build-qcow2.yml (dispatch with :dev-amd64)
+3. Wait for build-sign-push.yml to complete the AMD64 containerDisk build
    ↓
 4. Manual: promote-rhel10-bootc-prod (dispatch)
    ├─ :dev-amd64 → :prod-amd64
