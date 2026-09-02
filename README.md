@@ -38,7 +38,7 @@ Demoen understøtter to fuldstændigt separate, native stier for at undgå emule
 
 ### 2. Nøgleworkflows
 *   **Local Flow (ARM64):** `local-build.sh` $\rightarrow$ `local-push.sh` $\rightarrow$ `local-sign-keyless.sh` $\rightarrow$ `local-build-qcow2.sh`.
-*   **CI Flow (AMD64):** `build-sign-push.yml` builds and pushes both the bootc image and VM disk.
+*   **CI Flow (AMD64):** `build-sign-push.yml` (Bygger og pusher) $\rightarrow$ `build-qcow2.yml` (Konverterer til VM-disk).
 *   **Promotion:** `promote-rhel10-bootc-prod` sikrer, at `:prod` altid har samme digest som `:dev`.
 
 ### 3. OpenShift Virtualization (KubeVirt)
@@ -86,7 +86,7 @@ iterations of this project. Instead there are two fully separate, native-only pa
 | **Image tag** | `:dev-arm64` / `:prod-arm64` | `:dev-amd64` / `:prod-amd64` |
 | **Disk tag** | `:dev-disk-arm64` / `:prod-disk-arm64` | `:dev-disk-amd64` / `:prod-disk-amd64` |
 | **Used for** | Local UTM VM demo | OpenShift Virtualization on the x86_64 SNO cluster |
-| **Built by** | `local-build.sh`, `local-build-qcow2.sh` | `.github/workflows/build-sign-push.yml` |
+| **Built by** | `local-build.sh`, `local-build-qcow2.sh` | `.github/workflows/build-sign-push.yml`, `.github/workflows/build-qcow2.yml` |
 
 ## Quick local flow (ARM64, for the UTM VM)
 
@@ -117,7 +117,7 @@ Import `output/qcow2/disk-arm.qcow2` in UTM to create a local ARM VM.
 | `:dev-arm64` | `local-build.sh` + `local-push.sh` | Local ARM64 bootc image, for UTM |
 | `:dev-disk-arm64` | `local-build-qcow2.sh` | ARM64 KubeVirt containerDisk, for UTM only |
 | `:dev-amd64` | `build-sign-push.yml`, every push to `main` | AMD64 bootc image, native GitHub-hosted build |
-| `:dev-disk-amd64` | `build-sign-push.yml` | AMD64 KubeVirt containerDisk, for CDI import on SNO |
+| `:dev-disk-amd64` | `build-qcow2.yml` (manual dispatch) | AMD64 KubeVirt containerDisk, for CDI import on SNO |
 | `:prod-amd64` | `promote-rhel10-bootc-prod` workflow | Promoted from `:dev-amd64` (same digest) |
 | `:prod-disk-amd64` | `local-promote-disk.sh` | Promoted from `:dev-disk-amd64` (same digest, via `skopeo copy`) |
 | `:v1.0.0` | `git tag v1.0.0` | Immutable release |
@@ -128,7 +128,8 @@ SHA traceability is preserved via the image digest — no `dev-<sha>` tags neede
 
 Three workflows drive CI:
 
-- **`build-sign-push.yml`** — on every push to `main` or manual dispatch. Builds the AMD64 image and qcow2 containerDisk natively on a GitHub-hosted `ubuntu-latest` runner, then pushes `:dev-amd64` and `:dev-disk-amd64` to Quay. It also builds the ARM64 image on a self-hosted ARM64 runner and pushes `:dev-arm64`. The jobs are fully independent and never emulate AMD64 on the Mac.
+- **`build-sign-push.yml`** — on every push to `main`. Builds the AMD64 image natively on a GitHub-hosted `ubuntu-latest` runner and pushes `:dev-amd64` to Quay; also builds the ARM64 image on a self-hosted ARM64 runner and pushes `:dev-arm64`. The two jobs are fully independent (no shared runner, no emulation).
+- **`build-qcow2.yml`** (manual `workflow_dispatch`) — converts an AMD64 bootc image to a qcow2 disk and wraps it as a KubeVirt containerDisk, entirely on a native amd64 GitHub-hosted runner. It deliberately never passes `--platform` to `podman run`, even though the runner's arch already matches — doing so still routes the pull/run through Podman's cross-arch code path, which is what caused the original `no such container` failures against `registry.redhat.io/rhel10/bootc-image-builder`. It also pins the container storage driver up front and wipes any pre-seeded runner storage state, working around an upstream-documented driver-mismatch quirk on Ubuntu GitHub Actions runners.
 - **`promote-rhel10-bootc-prod`** (manual `workflow_dispatch`, self-hosted runner) — promotes a given source tag to `:prod` via `skopeo copy` (same digest, no rebuild), then signs it with keyless Cosign.
 
 Create these GitHub repository secrets:
@@ -157,8 +158,11 @@ CDI (Containerized Data Importer) imports the VM disk from Quay using a **KubeVi
 pip install ansible kubernetes
 ansible-galaxy collection install -r ansible/requirements.yml
 
-# Build the AMD64 bootc image and containerDisk on GitHub's native AMD64 runner
-gh workflow run build-sign-push.yml --ref main
+# Build the AMD64 containerDisk and push :dev-disk-amd64 to Quay
+# (runs on a native amd64 GitHub-hosted runner, no cross-arch build)
+gh workflow run build-qcow2.yml \
+  --field image=quay.io/waba/bootc-guide:dev-amd64 \
+  --field output_ref=quay.io/waba/bootc-guide:dev-disk-amd64
 
 # Promote :dev-disk-amd64 -> :prod-disk-amd64 (same digest, skopeo copy)
 SOURCE_DISK=quay.io/waba/bootc-guide:dev-disk-amd64 \
@@ -188,6 +192,6 @@ START_STEP=9a ./scripts/demo-run.sh
 
 Valid step IDs: `1 2 2b 3 4 5 6 7a 7b 7c 7d 8 9a 9b`
 
-Step 4 pushes the ARM64 image/signs it, while `build-sign-push.yml` builds the AMD64 image and containerDisk on GitHub Actions. Step 9a assumes that the workflow has completed.
+Step 4 pushes the ARM64 image/signs it, then dispatches `build-qcow2.yml` in the background (and, on macOS, opens an iTerm2 pane tailing `disk-build.log`) so the AMD64 containerDisk build runs in parallel while the demo continues through steps 5–8. Step 9a assumes that background build has already completed.
 
 Copy `scripts/demo-env.sh.example` to `scripts/demo-env.sh` (gitignored) and fill in your values — it pre-sets the full ARM64/AMD64 variable set (`IMAGE_ARM`, `IMAGE_AMD`, `DISK_IMAGE_ARM`, `DISK_IMAGE_AMD`, their `PROD_*` counterparts, `VM_SSH`, `SNO_API`, `SNO_TOKEN`, etc.) and is sourced automatically by `demo-run.sh`.

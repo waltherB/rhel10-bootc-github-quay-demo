@@ -46,6 +46,7 @@ build_ocpvirt_disk() {
   local disk_image="$2"
   local branch
   local run_id
+  local dispatch_output
 
   branch="$(git -C "${REPO_DIR}" branch --show-current)"
   if [[ -z "${branch}" ]]; then
@@ -55,17 +56,14 @@ build_ocpvirt_disk() {
   fi
 
   echo "==> Dispatching build-sign-push.yml for branch ${branch}"
-  gh workflow run build-sign-push.yml --ref "${branch}"
+  dispatch_output="$(gh workflow run build-sign-push.yml --ref "${branch}" 2>&1)"
+  printf '%s\n' "${dispatch_output}"
 
-  run_id="$(gh run list \
-    --workflow build-sign-push.yml \
-    --branch "${branch}" \
-    --event workflow_dispatch \
-    --limit 1 \
-    --json databaseId \
-    --jq '.[0].databaseId')"
+  run_id="$(printf '%s\n' "${dispatch_output}" | \
+    sed -nE 's#^https://github\.com/[^/]+/[^/]+/actions/runs/([0-9]+).*#\1#p' | \
+    head -n 1)"
   if [[ -z "${run_id}" ]]; then
-    echo "ERROR: could not find the dispatched build-sign-push.yml run." >&2
+    echo "ERROR: could not determine the dispatched build-sign-push.yml run ID." >&2
     exit 1
   fi
 
