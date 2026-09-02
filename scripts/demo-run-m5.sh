@@ -286,9 +286,9 @@ if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
   step 10 "One repository update, many VM deployments"
   say "The tested image can be applied to a fleet using the same target reference."
   say "The default is plan-only; no additional VMs are required for this demo."
-  note "Example fleet: demo-web-01 (.19) demo-web-02 (.20) demo-web-03 (.21) demo-web-04 (.22)"
-  run env IMAGE_UPDATE="${IMAGE_FIXED}" \
-    VM_TARGETS="demo@192.168.64.19 demo@192.168.64.20 demo@192.168.64.21 demo@192.168.64.22" \
+  note "Example fleet: demo-web-01 (.20) demo-web-02 (.21) demo-web-03 (.22) demo-web-04 (.23)"
+  run env IMAGE_UPDATE="${VM_TARGETS}" \
+    VM_TARGETS="${IMAGE_FIXED}" \
     FLEET_APPLY="${FLEET_APPLY}" ./scripts/demo-fleet-update-m5.sh
   pause "Press ENTER to continue..."
 fi
