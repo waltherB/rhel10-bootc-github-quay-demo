@@ -124,12 +124,31 @@ require_command ssh
   exit 1
 }
 
+check_images() {
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo -e "${CYAN}  Pre-flight: Verifying images${RESET}"
+  echo -e "${CYAN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  
+  local images=("${IMAGE_GOOD}" "${IMAGE_UPDATE}" "${IMAGE_BROKEN}" "${IMAGE_FIXED}")
+  
+  for img in "${images[@]}"; do
+    if podman inspect "$img" >/dev/null 2>&1; then
+      echo -e "${GREEN}  ✅ $img found${RESET}"
+    else
+      echo -e "${RED}  ❌ $img not found. Please run: podman pull $img${RESET}"
+      exit 1
+    fi
+  done
+  echo ""
+}
+
 clear
 echo -e "${CYAN}${BOLD}"
 echo "  RHEL Image Mode: pets -> cattle -> immutable reality"
 echo "  Apple Silicon Mac M5 + ARM64 UTM VM"
 echo -e "${RESET}"
 show_config
+check_images
 pause "Press ENTER to start the demo..."
 
 step 1 "See the image model"
@@ -214,6 +233,54 @@ wait_for_vm
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
+
+# Cleanup
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+say "Demo complete."
+
 
 if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
   step 10 "One repository update, many VM deployments"
