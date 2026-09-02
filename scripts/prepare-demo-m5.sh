@@ -17,14 +17,8 @@ fi
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
 : "${DISK_IMAGE_GOOD:=${QUAY_REPO}:demo-v1-disk-arm64}"
-: "${IMAGE_GOOD_AMD:=${QUAY_REPO}:demo-v1-amd64}"
-: "${IMAGE_UPDATE_AMD:=${QUAY_REPO}:demo-v2-amd64}"
-: "${IMAGE_BROKEN_AMD:=${QUAY_REPO}:demo-broken-amd64}"
-: "${IMAGE_FIXED_AMD:=${QUAY_REPO}:demo-v3-fixed-amd64}"
-: "${DISK_IMAGE_GOOD_AMD:=${QUAY_REPO}:demo-v1-disk-amd64}"
-: "${DISK_IMAGE_UPDATE_AMD:=${QUAY_REPO}:demo-v2-disk-amd64}"
-: "${DISK_IMAGE_BROKEN_AMD:=${QUAY_REPO}:demo-broken-disk-amd64}"
-: "${DISK_IMAGE_FIXED_AMD:=${QUAY_REPO}:demo-v3-fixed-disk-amd64}"
+: "${IMAGE_AMD:=${QUAY_REPO}:dev-amd64}"
+: "${DISK_IMAGE_AMD:=${QUAY_REPO}:dev-disk-amd64}"
 : "${SOURCE_IMAGE_ARM:=${IMAGE_ARM:-${QUAY_REPO}:dev-arm64}}"
 : "${ADD_CHATBOT:=1}"
 : "${AI_LAB_RECIPES_DIR:=}"
@@ -32,7 +26,7 @@ fi
 : "${PUSH_IMAGES:=1}"
 : "${REBUILD_GOOD:=1}"
 : "${BUILD_UTM_DISK:=1}"
-: "${BUILD_OCPVIRT_DISKS:=1}"
+: "${BUILD_OCPVIRT_DISK:=1}"
 
 require_command() {
   command -v "$1" >/dev/null 2>&1 || {
@@ -122,11 +116,8 @@ if [[ "${BUILD_UTM_DISK}" == "1" ]]; then
     ./scripts/local-build-qcow2.sh)
 fi
 
-if [[ "${BUILD_OCPVIRT_DISKS}" == "1" ]]; then
-  build_ocpvirt_disk "${IMAGE_GOOD_AMD}" "${DISK_IMAGE_GOOD_AMD}"
-  build_ocpvirt_disk "${IMAGE_UPDATE_AMD}" "${DISK_IMAGE_UPDATE_AMD}"
-  build_ocpvirt_disk "${IMAGE_BROKEN_AMD}" "${DISK_IMAGE_BROKEN_AMD}"
-  build_ocpvirt_disk "${IMAGE_FIXED_AMD}" "${DISK_IMAGE_FIXED_AMD}"
+if [[ "${BUILD_OCPVIRT_DISK}" == "1" ]]; then
+  build_ocpvirt_disk "${IMAGE_AMD}" "${DISK_IMAGE_AMD}"
 fi
 
 cat > "${TMP_DIR}/update/Containerfile" <<EOF
@@ -191,4 +182,4 @@ echo "Prepared images:"
 printf '  %s\n' "${IMAGE_GOOD}" "${IMAGE_UPDATE}" "${IMAGE_BROKEN}" "${IMAGE_FIXED}"
 echo
 echo "UTM disk: ${DISK_IMAGE_GOOD} (output/qcow2/disk-arm.qcow2)"
-echo "OCP Virt disks: ${DISK_IMAGE_GOOD_AMD}, ${DISK_IMAGE_UPDATE_AMD}, ${DISK_IMAGE_BROKEN_AMD}, ${DISK_IMAGE_FIXED_AMD}"
+echo "OCP Virt disk: ${DISK_IMAGE_AMD} (from ${IMAGE_AMD})"
