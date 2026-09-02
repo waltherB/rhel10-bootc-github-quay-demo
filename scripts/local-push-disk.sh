@@ -47,10 +47,13 @@ if [[ ! -f "${QCOW2}" ]]; then
   exit 1
 fi
 
-# Build a minimal containerDisk OCI image from scratch
-# The Containerfile is written to a temp dir alongside the qcow2
+# Build a minimal containerDisk OCI image from scratch.
+# Copy the actual qcow2 into a temp context and rename it to disk.qcow2 so the
+# Containerfile remains valid regardless of whether the source file is named
+# disk.qcow2 or disk-amd.qcow2.
 TMPDIR="$(mktemp -d)"
 trap 'rm -rf "${TMPDIR}"' EXIT
+cp "${QCOW2}" "${TMPDIR}/disk.qcow2"
 
 cat > "${TMPDIR}/Containerfile" <<'EOF'
 FROM scratch
@@ -64,7 +67,7 @@ podman build -q \
   --platform linux/amd64 \
   -f "${TMPDIR}/Containerfile" \
   -t "${DISK_IMAGE}" \
-  "${REPO_ROOT}/output/qcow2"
+  "${TMPDIR}"
 
 echo ""
 echo "  Pushing ${DISK_IMAGE} to Quay..."
