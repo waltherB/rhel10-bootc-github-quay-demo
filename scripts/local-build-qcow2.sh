@@ -56,10 +56,12 @@ if ! podman image exists "${IMAGE_ARM}"; then
   exit 1
 fi
 
-# bootc-image-builder itself comes from a registry. Reuse the local copy when
-# the builder is already available on the Podman machine.
-if ! podman image exists registry.redhat.io/rhel10/bootc-image-builder:latest; then
-  podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+# bootc-image-builder itself comes from a registry. Reuse the local copy only
+# when it has the same architecture as the local UTM build.
+BUILDER_ARCH="${PLATFORM#*/}"
+if [[ "$(podman image inspect registry.redhat.io/rhel10/bootc-image-builder:latest \
+  --format '{{.Architecture}}' 2>/dev/null || true)" != "${BUILDER_ARCH}" ]]; then
+  podman pull --platform "${PLATFORM}" registry.redhat.io/rhel10/bootc-image-builder:latest
 fi
 
 mkdir -p output
@@ -112,6 +114,7 @@ echo "  GraphRoot: ${GRAPHROOT}"
 # keeps the inner container's view of locks consistent with the host's.
 # As a last, non-destructive resort: podman system renumber
 podman run --rm --privileged \
+  --platform "${PLATFORM}" \
   --pull=never \
   --security-opt label=type:unconfined_t \
   -v "$(pwd)/config/config.toml:/config.toml:ro" \
