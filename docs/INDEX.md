@@ -83,6 +83,14 @@ Complete index of all documentation for the RHEL 10 bootc OpenShift Virtualizati
 - Quadlet systemd demo
 - ChatGPT integration example
 
+### DNS Configuration
+**[DNS-CONFIGURATION.md](DNS-CONFIGURATION.md)**
+- DNS server configuration (Cloudflare 1.1.1.1 + Google 8.8.8.8)
+- Multi-layer persistence (systemd-resolved + NetworkManager)
+- Verification commands
+- Troubleshooting guide
+- Customization instructions
+
 ---
 
 ## 🛠️ Deployment Tools
@@ -131,6 +139,7 @@ Complete index of all documentation for the RHEL 10 bootc OpenShift Virtualizati
 | DEPLOYMENT-GUIDE.md | Reference | 12 KB | Complete walkthrough |
 | TAG-AUDIT.md | Audit | 8 KB | Image tag verification |
 | DEPLOYMENT-SUMMARY.md | Summary | 8 KB | Overview & integration |
+| DNS-CONFIGURATION.md | Technical | 5 KB | DNS setup & verification |
 | speaker-notes-da.md | Slides | ~ | Presentation guide (Danish) |
 | openShift-virtualization-extension.md | Technical | ~ | Deep dive |
 | live-demo-checklist.md | Checklist | ~ | Demo day guide |
