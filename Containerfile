@@ -44,7 +44,6 @@ RUN set -ex; \
       systemd-resolved \
       policycoreutils --nogpgcheck; \
     dnf update -y; \
-    systemctl enable --now systemd-resolved \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
         subscription-manager unregister || true; \
@@ -55,6 +54,7 @@ RUN set -ex; \
       fi; \
       rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
     fi 
+RUN  systemctl enable systemd-resolved 
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
 COPY files/resolv.conf /etc/resolv.conf
