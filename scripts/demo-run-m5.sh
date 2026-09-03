@@ -212,6 +212,7 @@ ascii ""
 ascii "   ✔  Ingen VM nødvendig – hurtig feedback inden vi rører infrastruktur"
 echo ""
 say "Det samme bootc-image kan testes med almindelige container-værktøjer."
+pause "Tryk ENTER for at fortsætte..." 
 run podman pull "${IMAGE_GOOD}"
 run podman rm -f bootc-demo-test 2>/dev/null || true
 run podman run --rm -d --name bootc-demo-test -p 8080:80 "${IMAGE_GOOD}"
@@ -239,6 +240,7 @@ echo ""
 say "Hvert pushét image signeres med nøglefri Cosign – ingen langtidsholdbar nøgle."
 say "skopeo inspect viser den digest, der binder Quay, VM og git-commit sammen."
 note "Signering udføres af: ./scripts/local-sign-keyless.sh"
+pause "Tryk ENTER for at fortsætte..." 
 run skopeo inspect --raw "docker://${IMAGE_GOOD}" | python3 -m json.tool 2>/dev/null | head -30 || \
   run skopeo inspect --raw "docker://${IMAGE_GOOD}" | head -30
 note "Cosign-verificering:"
@@ -273,6 +275,7 @@ echo ""
 say "Promovering bruger skopeo copy – samme digest, bare et nyt :prod-tag."
 say "Intet nyt build: det der blev testet i CI er præcis det, der når prod."
 note "Udløser: gh workflow run promote-prod.yml --field source_tag=demo-v1-arm64"
+pause "Tryk ENTER for at fortsætte..." 
 run gh workflow run promote-prod.yml \
   --repo waltherB/rhel10-bootc-github-quay-demo \
   --field source_tag=demo-v1-arm64 || \
@@ -301,6 +304,7 @@ ascii "                                                  │    → webside fra 
 ascii "                                                  └─────────────────────────────┘"
 echo ""
 say "Nu kører den samme imagemodel som en fuld RHEL VM."
+pause "Tryk ENTER for at fortsætte..." 
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
@@ -399,6 +403,7 @@ ascii "   Nøglepunkt: den forrige deployment gemmes ALTID som rollback-mål."
 ascii "   Intet er gået tabt – bootc holder begge deployments på disk."
 echo ""
 say "En workload-ændring leveres som et nyt image – ikke som manuelle ændringer på hosten."
+pause "Tryk ENTER for at fortsætte..." 
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
@@ -426,6 +431,7 @@ ascii "   Dette er demoens 'åh nej'-øjeblik – sætter scenen for rollback-hi
 echo ""
 say "Denne version indeholder en kendt fejl: HTTP-tjenesten er ikke aktiveret."
 say "Fejlen gør rollback synlig og giver publikum en reel gendannelsessti."
+pause "Tryk ENTER for at fortsætte..." 
 run remote sudo bootc switch "${IMAGE_BROKEN}"
 run remote sudo systemctl reboot || true
 wait_for_vm
@@ -462,6 +468,7 @@ ascii "   Ingen geninstallation. Ingen Ansible. Ingen SSH-config-kirurgi."
 ascii "   bootc bevarer begge deployments – rollback er altid én genstart væk."
 echo ""
 say "bootc bevarer den forrige deployment som rollback-mål."
+pause "Tryk ENTER for at fortsætte..." 
 run remote sudo bootc rollback --apply || true
 wait_for_vm
 run remote sudo bootc status
@@ -490,6 +497,7 @@ ascii ""
 ascii "   Samme OS-livscyklusmønster: byg én gang → test → lever som image."
 echo ""
 say "Rettelsen bygges én gang, testes og leveres som en ny imageversion."
+pause "Tryk ENTER for at fortsætte..." 
 run remote sudo bootc switch "${IMAGE_FIXED}"
 run remote sudo systemctl reboot || true
 wait_for_vm
@@ -522,6 +530,7 @@ if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
   echo ""
   say "Det testede image kan anvendes på en flåde ved hjælp af samme målreference."
   note "Flåde: ${VM_TARGETS}"
+  pause "Tryk ENTER for at fortsætte..." 
   IMAGE_UPDATE="${IMAGE_FIXED}" VM_TARGETS="${VM_TARGETS}" FLEET_APPLY="${FLEET_APPLY}" \
     ./scripts/demo-fleet-update-m5.sh
   pause "Tryk ENTER for at fortsætte..."
@@ -537,8 +546,8 @@ if [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
   ascii "   │ Quay                 │ ───────────────► │ Quay                       │"
   ascii "   │ :dev-disk-amd64      │  samme digest    │ :prod-disk-amd64           │"
   ascii "   └──────────────────────┘                  └──────────────┬─────────────┘"
-  ascii "                                                             │  CDI import"
-  ascii "                                                             ▼"
+  ascii "                                                            │  CDI import"
+  ascii "                                                            ▼"
   ascii "   ┌──────────────────────────────────────────────────────────────────────┐"
   ascii "   │  OpenShift Virtualization (SNO x86_64)                               │"
   ascii "   │                                                                      │"
