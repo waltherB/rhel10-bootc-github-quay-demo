@@ -169,7 +169,8 @@ step "2b" "Verify signing and digest in Quay"
 say "Every pushed image is signed with keyless Cosign (OIDC – no long-lived key)."
 say "skopeo inspect shows the digest that ties Quay, the VM and the git commit together."
 note "Signing is done by: ./scripts/local-sign-keyless.sh"
-run skopeo inspect --raw "docker://${IMAGE_GOOD}" | python3 -m json.tool | head -30
+run skopeo inspect --raw "docker://${IMAGE_GOOD}" | python3 -m json.tool 2>/dev/null | head -30 || \
+  run skopeo inspect --raw "docker://${IMAGE_GOOD}" | head -30
 note "Cosign verification:"
 run cosign verify \
   --certificate-identity-regexp="https://github.com/waltherB/rhel10-bootc-github-quay-demo" \

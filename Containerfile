@@ -55,6 +55,7 @@ RUN set -ex; \
     fi 
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
+COPY files/resolv.conf /etc/resolv.conf
 COPY scripts/vm-status.sh /usr/local/bin/vm-status
 COPY scripts/vm-upgrade.sh /usr/local/bin/vm-upgrade
 RUN chmod +x /usr/local/bin/vm-status /usr/local/bin/vm-upgrade
