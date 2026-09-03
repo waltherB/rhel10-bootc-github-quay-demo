@@ -41,8 +41,10 @@ RUN set -ex; \
       git \
       libffi-devel \
       openssl-devel \
+      systemd-resolved \
       policycoreutils --nogpgcheck; \
     dnf update -y; \
+    systemctl enable --now systemd-resolved \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
         subscription-manager unregister || true; \
