@@ -63,6 +63,7 @@
               pod-security.kubernetes.io/enforce: privileged
               pod-security.kubernetes.io/audit: privileged
               pod-security.kubernetes.io/warn: privileged
+      ignore_errors: true   # namespace may already exist and user may lack patch rights
 
     - name: Validate disk_image is set
       assert:
@@ -231,7 +232,7 @@
             labels:
               app: "{{ vm_name }}"
           spec:
-            running: true
+            runStrategy: Always   # replaces deprecated spec.running: true (KubeVirt >= 1.0)
             template:
               metadata:
                 labels:
@@ -243,7 +244,7 @@
                   # defaults to SeaBIOS, which cannot boot a GPT disk and hangs
                   # forever at "Booting from Hard Disk...".
                   machine:
-                    type: pc-q35-rhel9.4.0  # AMD64 machine type — matches disk_image's arch
+                    type: pc-q35-rhel9.6.0  # AMD64 machine type — matches disk_image's arch; rhel9.6.0 on ROSA/OCP AWS clusters
                   features:
                     acpi: {}
                     smm:
@@ -252,7 +253,7 @@
                     bootloader:
                       efi: {}               # Enables UEFI, not BIOS
                   cpu:
-                    cores: "{{ vm_cores }}"
+                    cores: "{{ vm_cores | int }}"
                   memory:
                     guest: "{{ vm_memory }}"
                   devices:
@@ -261,7 +262,7 @@
                         disk:
                           bus: virtio
                         bootOrder: 1
-                      - name: cloudinit
+                      - name: cloudinitdisk   # must be named 'cloudinitdisk' for kubemacpool webhook
                         disk:
                           bus: virtio
                     interfaces:
@@ -274,10 +275,11 @@
                   - name: bootdisk
                     dataVolume:
                       name: "{{ vm_name }}-dv"
-                  - name: cloudinit
+                  - name: cloudinitdisk       # must match disk name above
                     cloudInitNoCloud:
                       userData: |
                         #cloud-config
+                        user: demo
                         hostname: {{ vm_name }}
                         ssh_authorized_keys:
                           - {{ ssh_pub_key }}

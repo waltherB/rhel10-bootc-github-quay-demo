@@ -12,6 +12,8 @@
 #   ./scripts/deploy-to-openshift-virt.sh
 #   ./scripts/deploy-to-openshift-virt.sh --image-ref quay.io/waba/bootc-guide:dev-amd64
 #   ./scripts/deploy-to-openshift-virt.sh --disk-ref quay.io/waba/bootc-guide:dev-disk-amd64
+#   ./scripts/deploy-to-openshift-virt.sh --namespace waba-dev --storage-class gp3
+#   ./scripts/deploy-to-openshift-virt.sh --namespace waba-dev --storage-class gp3 --disk-size 20Gi
 #
 # Environment variables (or use --flags):
 #   IMAGE_AMD           - Base AMD64 bootc image (default: quay.io/waba/bootc-guide:dev-amd64)
@@ -21,7 +23,7 @@
 #   VM_CORES            - CPU cores (default: 2)
 #   VM_MEMORY           - Memory (default: 2Gi)
 #   VM_DISK_SIZE        - Disk size (default: 60Gi)
-#   VM_STORAGE_CLASS    - Storage class (default: lvms-vg1)
+#   VM_STORAGE_CLASS    - Storage class (default: lvms-vg1; use gp3 on AWS clusters)
 #   SNO_API             - SNO cluster API URL
 #   SNO_TOKEN           - SNO cluster auth token
 
@@ -68,6 +70,14 @@ while [[ $# -gt 0 ]]; do
             ;;
         --namespace)
             VM_NAMESPACE="$2"
+            shift 2
+            ;;
+        --storage-class)
+            VM_STORAGE_CLASS="$2"
+            shift 2
+            ;;
+        --disk-size)
+            VM_DISK_SIZE="$2"
             shift 2
             ;;
         --help)
@@ -122,14 +132,24 @@ for cmd in oc ansible ansible-playbook; do
     fi
 done
 
-# Check oc login status
-if ! oc cluster-info &> /dev/null; then
+# Check oc login status — use 'oc whoami' since cluster-info needs kube-system
+# list access which is often restricted on multi-tenant clusters
+if ! oc whoami &> /dev/null; then
     log_error "Not logged in to an OpenShift cluster"
     echo "Run: oc login https://api.your-cluster.example.com --token=<token>"
     exit 1
 fi
 
 log_success "OpenShift cluster connectivity OK"
+
+# Check storage quota if possible
+STORAGE_QUOTA=$(oc get quota storage -n "${VM_NAMESPACE}" \
+  -o jsonpath='{.status.hard.requests\.storage}' 2>/dev/null || echo "")
+STORAGE_USED=$(oc get quota storage -n "${VM_NAMESPACE}" \
+  -o jsonpath='{.status.used.requests\.storage}' 2>/dev/null || echo "")
+if [[ -n "${STORAGE_QUOTA}" && -n "${STORAGE_USED}" ]]; then
+  log_info "Storage quota: used=${STORAGE_USED} / limit=${STORAGE_QUOTA}"
+fi
 
 # Check podman/docker auth to quay.io
 if ! grep -q "quay.io" ~/.docker/config.json 2>/dev/null; then
