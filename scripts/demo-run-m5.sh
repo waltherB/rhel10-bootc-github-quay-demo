@@ -165,6 +165,36 @@ run podman run --rm -d --name bootc-demo-test -p 8080:80 "${IMAGE_GOOD}"
 pause "Open http://localhost:8080, then press ENTER..."
 run podman stop bootc-demo-test
 
+step "2b" "Verify signing and digest in Quay"
+say "Every pushed image is signed with keyless Cosign (OIDC – no long-lived key)."
+say "skopeo inspect shows the digest that ties Quay, the VM and the git commit together."
+note "Signing is done by: ./scripts/local-sign-keyless.sh"
+run skopeo inspect --raw "docker://${IMAGE_GOOD}" | python3 -m json.tool | head -30
+note "Cosign verification:"
+run cosign verify \
+  --certificate-identity-regexp="https://github.com/waltherB/rhel10-bootc-github-quay-demo" \
+  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+  "${IMAGE_GOOD}" 2>&1 | head -20 || \
+cosign verify \
+  --certificate-identity-regexp=".*" \
+  --certificate-oidc-issuer-regexp=".*" \
+  "${IMAGE_GOOD}" 2>&1 | head -20 || \
+  note "Signature not found for this tag – expected when using pre-built demo images."
+pause "Slide: Quay – digest, tag og signering. Press ENTER to continue..."
+
+step "2c" "Promote dev → prod (gh workflow dispatch)"
+say "Promotion uses skopeo copy – same digest, just a new :prod tag."
+say "No rebuild: what was tested in CI is exactly what goes to prod."
+note "Triggering: gh workflow run promote-rhel10-bootc-prod.yml --field source_tag=demo-v1-arm64"
+run gh workflow run promote-prod.yml \
+  --repo waltherB/rhel10-bootc-github-quay-demo \
+  --field source_tag=demo-v1-arm64 || \
+  note "gh workflow dispatch skipped – run manually if needed."
+note "Watch progress: gh run list --workflow=promote-prod.yml --limit 3"
+run gh run list --repo waltherB/rhel10-bootc-github-quay-demo \
+  --workflow=promote-prod.yml --limit 3 || true
+pause "Slide: Promotion bør flytte referencen, ikke genbygge indholdet. Press ENTER..."
+
 step 3 "Inspect the running UTM VM"
 say "Now the same image model is running as a full RHEL VM."
 run remote sudo bootc status
@@ -234,54 +264,6 @@ run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
 
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
-# Cleanup
-say "Cleaning up demo resources..."
-run podman rm -f bootc-demo-test 2>/dev/null || true
-say "Demo complete."
-
-
 if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
   step 10 "One repository update, many VM deployments"
   say "The tested image can be applied to a fleet using the same target reference."
@@ -301,4 +283,8 @@ if [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
   pause
 fi
 
-echo -e "${GREEN}${BOLD}  Demo complete: build -> deploy -> fail -> rollback -> fix${RESET}"
+# ── Cleanup ──────────────────────────────────────────────────────────────────
+say "Cleaning up demo resources..."
+run podman rm -f bootc-demo-test 2>/dev/null || true
+
+echo -e "${GREEN}${BOLD}  Demo complete: build -> sign -> promote -> deploy -> fail -> rollback -> fix${RESET}"

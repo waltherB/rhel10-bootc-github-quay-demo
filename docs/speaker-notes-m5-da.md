@@ -9,8 +9,11 @@ Alle tunge builds, qcow2-genereringer og registry-publiceringer skal være
 færdige før sessionen. Live-demoen handler om den operationelle livscyklus:
 
 ```text
-image -> VM -> opdatering -> fejl -> rollback -> rettelse
+image -> container-test -> signering -> promotion -> VM -> opdatering -> fejl -> rollback -> rettelse
 ```
+
+Forudsætninger på præsentationsmaskinen: `podman`, `skopeo`, `cosign`, `gh` (GitHub CLI)
+og SSH-adgang til UTM-VM’en.
 
 ## Åbning
 
@@ -53,6 +56,57 @@ application containers. Vi tester først hurtigt, før vi involverer en VM.
 
 Det er ikke det samme som at sige, at en container og en VM har samme runtime-
 rolle. Pointen er, at build- og testmodellen kan genbruges.
+
+## 2b. Verifikation af signering og digest i Quay
+
+Scriptet kører:
+
+```bash
+skopeo inspect --raw docker://<image> | python3 -m json.tool | head -30
+cosign verify --certificate-identity-regexp="..." <image>
+```
+
+Talepunkter:
+
+- Digest er indholdets fingeraftryk – ikke et navn, men en kryptografisk hash.
+- Tag peger på digest; det er digest der identificerer, hvad der rent faktisk kører.
+- Keyless Cosign-signering bruger OIDC-identiteten fra GitHub Actions – ingen
+  langtlevende nøgler i repository eller secrets.
+- Quay-visningen her er slide 3 (Quay: versionering, digest og signering):
+  promotion bør flytte referencen, ikke genbygge indholdet.
+
+Sig:
+
+> Vi kan se nøjagtigt hvad der er i imaget, hvem der signerede det og hvornår.
+> Det giver sporbarhed fra git commit til kørende VM.
+
+## 2c. Promotion fra dev til prod (gh workflow dispatch)
+
+Scriptet kører:
+
+```bash
+gh workflow run promote-prod.yml \
+  --repo waltherB/rhel10-bootc-github-quay-demo \
+  --field source_tag=demo-v1-arm64
+
+gh run list --workflow=promote-prod.yml --limit 3
+```
+
+Workflowen (`promote-rhel10-bootc-prod`) bruger `skopeo copy` – samme digest,
+kun et nyt `:prod`-tag. Cosign-signering gentages på det nye tag.
+
+Talepunkter:
+
+- `gh workflow run` er den programmatiske gate: ingen manuelle klik i GitHub UI.
+- Promotion er adskilt fra build – det er en bevidst beslutning, ikke en
+  automatisk konsekvens af et push.
+- Samme artefakt hele vejen: dev, test og prod kører den samme sha256-digest.
+- Workflowen kan kædes med en change-window eller godkendelsesproces.
+
+Sig:
+
+> Vi flytte ikke et tag ved at genbygge. Vi kopierer referencen fra det
+> testede artefakt. Det er hvad "promotion" betyder i denne model.
 
 ## 3. Samme image som VM
 
@@ -189,9 +243,9 @@ Denne del er kort og kan udelades, hvis hoveddemoen har brug for ekstra tid.
 
 ## Afslutning
 
-> Vi gik fra image til VM, fra VM til opdatering, fra fejl til rollback og fra
-> rollback til en rettet version. Det er “pets til cattle” omsat til konkret
-> Linux-drift.
+> Vi gik fra image til container-test, fra test til signering og promotion, fra
+> promotion til VM, fra VM til opdatering, fra fejl til rollback og fra rollback
+> til en rettet version. Det er “pets til cattle” omsat til konkret Linux-drift.
 
 Image Mode er ikke en magisk erstatning for al administration. Det er en anden
 leverancemodel for OS'et, som giver versionsstyring, reproducerbarhed, bedre
