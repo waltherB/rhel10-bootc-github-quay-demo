@@ -20,7 +20,7 @@ cat /etc/motd
 
 echo ""
 echo "=== httpd check ==="
-if curl -fsS http://localhost | head -5; then
+if curl -fsS http://localhost | lynx -stdin -dump; then
   echo "httpd: OK"
 else
   echo "httpd: not responding"
