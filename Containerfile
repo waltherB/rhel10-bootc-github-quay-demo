@@ -41,7 +41,6 @@ RUN set -ex; \
       git \
       libffi-devel \
       openssl-devel \
-      systemd-resolved \
       policycoreutils --nogpgcheck; \
     dnf update -y; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
@@ -54,10 +53,8 @@ RUN set -ex; \
       fi; \
       rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
     fi 
-RUN  systemctl enable systemd-resolved 
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
-COPY files/resolv.conf /etc/resolv.conf
 COPY scripts/vm-status.sh /usr/local/bin/vm-status
 COPY scripts/vm-upgrade.sh /usr/local/bin/vm-upgrade
 RUN chmod +x /usr/local/bin/vm-status /usr/local/bin/vm-upgrade

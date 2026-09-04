@@ -580,3 +580,14 @@ echo "  ║   byg → signer → promover → udrul → chatbot                 
 echo "  ║   → fejl → rollback → ret → flåde                            ║"
 echo "  ╚══════════════════════════════════════════════════════════════╝"
 echo -e "${RESET}"
+
+# ── Oprydning ─────────────────────────────────────────────────────────────────
+say "Link til OpenShift Virtualization SNO-udvidelsen:"
+echo ""
+echo -e "${CYAN}${BOLD}"
+echo "  ╔══════════════════════════════════════════════════════════════╗"
+echo "  ║   Script der starter ansible playbooks                       ║"
+echo "  ║                                                              ║"
+echo "  ║   ./scripts/provision-vm.sh                                  ║"
+echo "  ╚══════════════════════════════════════════════════════════════╝"
+echo -e "${RESET}"
