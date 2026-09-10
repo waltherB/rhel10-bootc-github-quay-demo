@@ -36,6 +36,24 @@ grep -q 'cosign sign --key' "$TMP_DIR/out.txt"
 
 grep -q 'cosign verify --key' "$TMP_DIR/out.txt"
 
+# Regression: a missing COSIGN_CERT file must not force certificate mode
+# when a COSIGN_KEY/COSIGN_PUB pair is already configured locally.
+PATH="$TMP_DIR/bin:$PATH" \
+COSIGN_KEY="$TMP_DIR/private.key" \
+COSIGN_PUB="$TMP_DIR/public.pub" \
+COSIGN_CERT="$TMP_DIR/missing-cert.pem" \
+IMAGE="quay.io/example:demo" \
+"$ROOT_DIR/scripts/local-sign-keyless.sh" > "$TMP_DIR/out2.txt" 2>&1 || {
+  echo "local fallback test failed because the helper did not tolerate a missing COSIGN_CERT file" >&2
+  exit 1
+}
+
+grep -q 'cosign sign --key' "$TMP_DIR/out2.txt"
+if grep -q -- '--cert' "$TMP_DIR/out2.txt"; then
+  echo "local fallback test failed because certificate mode was still selected despite a missing COSIGN_CERT" >&2
+  exit 1
+fi
+
 grep -q 'sign_image_with_cosign' "$ROOT_DIR/scripts/prepare-demo-m5.sh"
 
 echo "local key mode test passed"

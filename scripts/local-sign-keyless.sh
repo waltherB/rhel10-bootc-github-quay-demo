@@ -31,17 +31,28 @@ IMAGE_BY_DIGEST="${IMAGE%:*}@${DIGEST}"
 
 echo "Signing ${IMAGE_BY_DIGEST}"
 
-if [[ -n "${COSIGN_KEY:-}" || -n "${COSIGN_CERT:-}" ]]; then
-  echo "local key/public-key or X.509 certificate mode selected"
+LOCAL_CERT_MODE=0
+if [[ -n "${COSIGN_CERT:-}" && -f "${COSIGN_CERT}" ]]; then
+  LOCAL_CERT_MODE=1
+fi
+
+if [[ -n "${COSIGN_KEY:-}" || "${LOCAL_CERT_MODE}" == "1" ]]; then
+  if [[ -n "${COSIGN_KEY:-}" && "${LOCAL_CERT_MODE}" == "1" ]]; then
+    echo "local key/public-key and X.509 certificate mode selected"
+  elif [[ -n "${COSIGN_KEY:-}" ]]; then
+    echo "local key/public-key mode selected"
+  elif [[ "${LOCAL_CERT_MODE}" == "1" ]]; then
+    echo "local X.509 certificate mode selected"
+  fi
 
   SIGN_ARGS=(sign)
   if [[ -n "${COSIGN_KEY:-}" ]]; then
     SIGN_ARGS+=(--key "${COSIGN_KEY}")
   fi
-  if [[ -n "${COSIGN_CERT:-}" ]]; then
+  if [[ "${LOCAL_CERT_MODE}" == "1" && -n "${COSIGN_CERT:-}" ]]; then
     SIGN_ARGS+=(--cert "${COSIGN_CERT}")
   fi
-  if [[ -n "${COSIGN_CERT_CHAIN:-}" ]]; then
+  if [[ -n "${COSIGN_CERT_CHAIN:-}" && -f "${COSIGN_CERT_CHAIN}" ]]; then
     SIGN_ARGS+=(--cert-chain "${COSIGN_CERT_CHAIN}")
   fi
   SIGN_ARGS+=("${IMAGE_BY_DIGEST}")
@@ -51,7 +62,7 @@ if [[ -n "${COSIGN_KEY:-}" || -n "${COSIGN_CERT:-}" ]]; then
   if [[ -n "${COSIGN_PUB:-}" ]]; then
     echo "Verifying using local public key ${COSIGN_PUB}..."
     cosign verify --key "${COSIGN_PUB}" "${IMAGE_BY_DIGEST}"
-  elif [[ -n "${COSIGN_CERT:-}" ]]; then
+  elif [[ "${LOCAL_CERT_MODE}" == "1" && -n "${COSIGN_CERT:-}" ]]; then
     echo "Verifying using local certificate ${COSIGN_CERT}..."
     cosign verify --cert "${COSIGN_CERT}" "${IMAGE_BY_DIGEST}"
   fi
