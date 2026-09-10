@@ -1,0 +1,118 @@
+name: Build, Sign, and Push bootc (AMD64 & ARM64)
+
+on:
+  push:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+env:
+  QUAY_REPO: "quay.io/waba/bootc-guide"
+
+jobs:
+  # ============================================================
+  # 1. AMD64 JOB (Runs on GitHub-Hosted x86_64 Runner)
+  # ============================================================
+  build-amd64:
+    name: Build AMD64 (GitHub Runner)
+    runs-on: ubuntu-latest
+    env:
+      IMAGE_AMD: "quay.io/waba/bootc-guide:dev-amd64"
+      DISK_IMAGE_AMD: "quay.io/waba/bootc-guide:dev-disk-amd64"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # Wipe any storage state the runner image may have pre-seeded
+      - name: Reset container storage
+        run: |
+          sudo podman system reset --force || true
+          sudo rm -rf /var/lib/containers/storage /run/containers/storage
+
+      # Pin container storage driver to prevent storage driver mismatch errors
+      - name: Pin container storage driver
+        run: |
+          sudo mkdir -p /etc/containers
+          printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' | \
+            sudo tee /etc/containers/storage.conf
+
+      - name: Log in to registry.redhat.io
+        run: |
+          if [ -z "${{ secrets.RH_REGISTRY_USERNAME }}" ] || [ -z "${{ secrets.RH_REGISTRY_PASSWORD }}" ]; then
+            echo "ERROR: RH_REGISTRY_USERNAME or RH_REGISTRY_PASSWORD secrets are not set!"
+            echo "Please add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+          echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
+            sudo podman login registry.redhat.io \
+              -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
+
+      - name: Log in to Quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | \
+            sudo podman login quay.io \
+              -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
+
+      # PHASE 1: Build the AMD64 OS container image
+      - name: Build bootc AMD64 Container Image
+        run: |
+          if [ -z "${{ secrets.DEMO_PUB_KEY }}" ]; then
+            echo "ERROR: DEMO_PUB_KEY secret is not set!"
+            exit 1
+          fi
+          sudo podman build \
+            --platform linux/amd64 \
+            --build-arg DEMO_PUB_KEY="${{ secrets.DEMO_PUB_KEY }}" \
+            --build-arg RHSM_ORG="${{ secrets.RHSM_ORG }}" \
+            --build-arg RHSM_ACTIVATION_KEY="${{ secrets.RHSM_ACTIVATION_KEY }}" \
+            -t ${{ env.IMAGE_AMD }} \
+            -f Containerfile .
+
+      # PHASE 1 (Push): Push the AMD64 OS container image to Quay
+      - name: Push AMD64 Container Image to Quay
+        run: |
+          sudo podman push ${{ env.IMAGE_AMD }}
+
+      # PHASE 2: Build the AMD64 qcow2 disk image
+      - name: Build bootc AMD64 qcow2 Disk
+        run: |
+          mkdir -p output-amd64
+          sudo podman run --rm --privileged \
+            -v ./config/config.toml:/config.toml:ro \
+            -v ./output-amd64:/output \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            -v /run/containers/storage:/run/containers/storage \
+            -v /etc/containers/storage.conf:/etc/containers/storage.conf:ro \
+            registry.redhat.io/rhel10/bootc-image-builder:latest \
+            --type qcow2 \
+            --config /config.toml \
+            "${{ env.IMAGE_AMD }}"
+
+      - name: Fix ownership of build output
+        run: sudo chown -R "$(id -u):$(id -g)" output-amd64
+
+      - name: Rename output
+        run: mv output-amd64/qcow2/disk.qcow2 output-amd64/qcow2/disk-amd64.qcow2
+
+      # PHASE 3: Wrap qcow2 disk in a containerDisk and push to Quay
+      - name: Build containerDisk image
+        run: |
+          mkdir -p ctxdir
+          cp output-amd64/qcow2/disk-amd64.qcow2 ctxdir/
+          cat > ctxdir/Containerfile <<'EOF'
+          FROM scratch
+          COPY disk-amd64.qcow2 /disk/disk.qcow2
+          EOF
+          sudo podman build \
+            -f ctxdir/Containerfile \
+            -t ${{ env.DISK_IMAGE_AMD }} \
+            ctxdir
+
+      - name: Push containerDisk image to Quay
+        run: sudo podman push ${{ env.DISK_IMAGE_AMD }}
+
+      - name: Upload AMD64 qcow2 Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qcow2-amd64
+          path: output-amd64/qcow2/disk-amd64.qcow2

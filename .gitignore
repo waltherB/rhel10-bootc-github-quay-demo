@@ -1,0 +1,14 @@
+output/manifest-qcow2.json
+output/qcow2/disk.qcow2
+output/qcow2/disk-amd.qcow2
+.DS_Store
+scripts/demo-env.sh
+actions-runner/
+pull-secret.json
+*.log
+.github/workflows/build-qcow2.yml
+ctxdir/disk-arm.qcow2
+.gitignore
+output/qcow2/disk-arm.qcow2
+cosign/*
+!cosign/.gitkeep

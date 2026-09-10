@@ -1,0 +1,123 @@
+---
+- name: Trigger bootc upgrade in running VM
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    vm_name: rhel10-bootc-demo
+    vm_namespace: bootc-vms
+    ssh_identity_file: "{{ '~/.ssh/id_ed25519' | expanduser }}"
+  tasks:
+    - name: Check current bootc status in VM
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - ssh
+          - demo@vm/{{ vm_name }}
+          - -i
+          - "{{ ssh_identity_file }}"
+          - --namespace
+          - "{{ vm_namespace }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - -c
+          - sudo bootc status
+      register: bootc_status_before
+      changed_when: false
+
+    - name: Show current status
+      ansible.builtin.debug:
+        var: bootc_status_before.stdout_lines
+
+    - name: Check if upgrade is available
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - ssh
+          - demo@vm/{{ vm_name }}
+          - -i
+          - "{{ ssh_identity_file }}"
+          - --namespace
+          - "{{ vm_namespace }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - -c
+          - sudo bootc upgrade --check
+      register: upgrade_check
+      changed_when: false
+      failed_when: false
+
+    - name: Show upgrade check result
+      ansible.builtin.debug:
+        var: upgrade_check.stdout_lines
+
+    - name: Run bootc upgrade (stage new image)
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - ssh
+          - demo@vm/{{ vm_name }}
+          - -i
+          - "{{ ssh_identity_file }}"
+          - --namespace
+          - "{{ vm_namespace }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - -c
+          - sudo bootc upgrade
+      when: "'Update available' in upgrade_check.stdout"
+      register: upgrade_result
+
+    - name: Reboot VM into new image
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - ssh
+          - demo@vm/{{ vm_name }}
+          - -i
+          - "{{ ssh_identity_file }}"
+          - --namespace
+          - "{{ vm_namespace }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - -c
+          - sudo systemctl reboot
+      when: upgrade_result is changed
+      failed_when: false
+      changed_when: true
+
+    - name: Wait for VM to come back up
+      kubernetes.core.k8s_info:
+        api_version: kubevirt.io/v1
+        kind: VirtualMachineInstance
+        name: "{{ vm_name }}"
+        namespace: "{{ vm_namespace }}"
+      register: vmi
+      until: >
+        vmi.resources | length > 0 and vmi.resources[0].status.phase == "Running"
+      retries: 30
+      delay: 10
+      when: upgrade_result is changed
+
+    - name: Verify new bootc status after upgrade
+      ansible.builtin.command:
+        argv:
+          - virtctl
+          - ssh
+          - demo@vm/{{ vm_name }}
+          - -i
+          - "{{ ssh_identity_file }}"
+          - --namespace
+          - "{{ vm_namespace }}"
+          - --local-ssh-opts=-o StrictHostKeyChecking=no
+          - --local-ssh-opts=-o UserKnownHostsFile=/dev/null
+          - -c
+          - sudo bootc status
+      register: bootc_status_after
+      changed_when: false
+      when: upgrade_result is changed
+
+    - name: Show new status
+      ansible.builtin.debug:
+        var: bootc_status_after.stdout_lines
+      when: upgrade_result is changed

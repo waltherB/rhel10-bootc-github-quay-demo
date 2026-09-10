@@ -1,0 +1,157 @@
+name: Build bootc amd64 qcow2
+
+on:
+  workflow_dispatch:
+    inputs:
+      output_ref:
+        description: 'Git ref to use for the output image'
+        required: false
+        default: 'main'
+        type: string
+      image:
+        description: "Source bootc container image to convert (must be amd64)"
+        required: false
+        default: "quay.io/waba/bootc-guide:dev-amd64"
+
+# NOTE: this workflow is amd64-only by design. GitHub-hosted ubuntu
+# runners are native amd64, and bootc-image-builder's source image
+# (built by the CI pipeline as :dev-amd64 / :prod-amd64) is amd64 too.
+# We deliberately do NOT pass --platform to podman run below: forcing
+# a platform flag that already matches the runner's native arch still
+# routes the pull/run through Podman's cross-arch code path, which is
+# what caused the persistent "image not known / no such container"
+# error against registry.redhat.io/rhel10/bootc-image-builder. Native
+# amd64-on-amd64, no emulation, no --platform flag needed.
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    env:
+      IMAGE: ${{ github.event.inputs.image }}
+      OUTPUT_REF: ${{ github.event.inputs.output_ref }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve output ref
+        run: |
+          if [[ -n "$OUTPUT_REF" && "$OUTPUT_REF" != "main" ]]; then
+            RESOLVED="$OUTPUT_REF"
+          else
+            BASE="${IMAGE%:*}"
+            TAG="${IMAGE##*:}"
+            RESOLVED="${BASE}:${TAG}-disk"
+          fi
+          echo "Resolved output ref: $RESOLVED"
+          echo "OUTPUT_REF=$RESOLVED" >> "$GITHUB_ENV"
+
+      - name: Install podman
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y podman
+
+      # Wipe any storage state the runner image may have pre-seeded
+      - name: Reset container storage
+        run: |
+          sudo podman system reset --force || true
+          sudo rm -rf /var/lib/containers/storage /run/containers/storage
+
+      # Known Ubuntu GitHub Actions runner quirk (upstream-documented, see
+      # https://github.com/osbuild/bootc-image-builder/issues/446): if the
+      # storage driver isn't pinned explicitly BEFORE the first pull, the
+      # storage DB ends up with an empty/ambiguous graph driver. When
+      # bootc-image-builder's internal podman later reads that same shared
+      # storage and defaults to "overlay", it hits a driver mismatch — which
+      # surfaces downstream as a confusing "no such container" / exit 125
+      # error during manifest generation, not as an explicit driver-mismatch
+      # message. Pinning it here up front avoids that entirely.
+      - name: Pin container storage driver
+        run: |
+          sudo mkdir -p /etc/containers
+          printf '[storage]\ndriver = "overlay"\nrunroot = "/run/containers/storage"\ngraphroot = "/var/lib/containers/storage"\n' | \
+            sudo tee /etc/containers/storage.conf
+
+#      - name: Setup Podman runtime directory
+#        run: |
+#          export XDG_RUNTIME_DIR=/tmp/podman-runtime
+#          mkdir -p $XDG_RUNTIME_DIR
+#          echo "XDG_RUNTIME_DIR=/tmp/podman-runtime" >> $GITHUB_ENV
+
+      - name: Show podman storage info
+        run: sudo podman info
+
+      - name: Log in to registry.redhat.io
+        run: |
+          if [ -z "${{ secrets.RH_REGISTRY_USERNAME }}" ] || [ -z "${{ secrets.RH_REGISTRY_PASSWORD }}" ]; then
+            echo "ERROR: RH_REGISTRY_USERNAME or RH_REGISTRY_PASSWORD secrets are not set!"
+            echo "Please add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+          echo "${{ secrets.RH_REGISTRY_PASSWORD }}" | \
+            sudo podman login registry.redhat.io \
+              -u "${{ secrets.RH_REGISTRY_USERNAME }}" --password-stdin
+
+      - name: Log in to quay.io
+        run: |
+          echo "${{ secrets.QUAY_TOKEN }}" | \
+            sudo podman login quay.io -u "${{ secrets.QUAY_USERNAME }}" --password-stdin
+
+      - name: Pull source image
+        run: sudo podman pull "$IMAGE"
+
+      - name: Pull bootc-image-builder
+        run: sudo podman pull registry.redhat.io/rhel10/bootc-image-builder:latest
+
+      - name: Verify images are present
+        run: sudo podman images
+
+      - name: Debug storage
+        run: |
+          sudo podman info
+          sudo ls -ld /var/lib/containers/storage
+          sudo ls -ld /run/containers/storage || true
+
+      - name: Build qcow2
+        run: |
+          mkdir -p output
+          sudo podman run --rm --privileged \
+            -v ./config/config.toml:/config.toml:ro \
+            -v ./output:/output \
+            -v /var/lib/containers/storage:/var/lib/containers/storage \
+            -v /run/containers/storage:/run/containers/storage \
+            -v /etc/containers/storage.conf:/etc/containers/storage.conf:ro \
+            registry.redhat.io/rhel10/bootc-image-builder:latest \
+            --type qcow2 \
+            --config /config.toml \
+            "$IMAGE"
+
+      - name: Fix ownership of build output
+        run: sudo chown -R "$(id -u):$(id -g)" output
+
+      - name: Rename output
+        run: mv output/qcow2/disk.qcow2 output/qcow2/disk-amd64.qcow2
+
+      - name: Build containerDisk image
+        run: |
+          mkdir -p ctxdir
+          cp output/qcow2/disk-amd64.qcow2 ctxdir/
+          cat > ctxdir/Containerfile <<'EOF'
+          FROM scratch
+          COPY disk-amd64.qcow2 /disk/disk.qcow2
+          EOF
+          sudo podman build \
+            -f ctxdir/Containerfile \
+            -t "$OUTPUT_REF" \
+            ctxdir
+
+      - name: Push containerDisk image to Quay
+        run: sudo podman push "$OUTPUT_REF"
+
+      - name: Upload as workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: disk-amd64-qcow2
+          path: output/qcow2/disk-amd64.qcow2
+          retention-days: 7

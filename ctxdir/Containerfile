@@ -1,0 +1,2 @@
+FROM scratch
+COPY disk-arm.qcow2 /disk/disk.qcow2
