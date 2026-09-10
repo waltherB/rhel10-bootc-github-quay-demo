@@ -126,7 +126,7 @@ Complete index of all documentation for the RHEL 10 bootc OpenShift Virtualizati
 - `local-sign-keyless.sh` - Sign with Cosign
 - `local-build-qcow2.sh` - Convert to QCOW2 disk
 - `local-promote-disk.sh` - Promote disk image
-- `demo-run.sh` - Automated full demo
+- `demo-run-m5.sh` - Primary automated M5 demo flow
 - And more...
 
 ---
@@ -190,7 +190,7 @@ Complete index of all documentation for the RHEL 10 bootc OpenShift Virtualizati
 ### Local Development
 - Script: `scripts/local-build.sh` (ARM64 build on MacBook)
 - Script: `scripts/local-build-qcow2.sh` (Convert to QCOW2)
-- Script: `scripts/demo-run.sh` (Full automated demo)
+- Script: `scripts/demo-run-m5.sh` (Primary automated M5 demo)
 
 ### OpenShift Virtualization
 - Ansible: `ansible/provision-vm.yml` (VM provisioning)

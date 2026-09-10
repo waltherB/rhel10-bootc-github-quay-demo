@@ -47,9 +47,11 @@ Vi udvider demoen til at vise, hvordan CDI importerer VM-disken (`.qcow2`) fra Q
 ## 🛠️ Opsætning og Kørsel
 
 **For at køre demoen:**
-1.  Klon repository'et.
-2.  Følg `scripts/demo-env.sh.example` for at sætte miljøvariabler.
-3.  Kør `scripts/demo-run.sh` for en komplet, automatiseret gennemgang.
+1. Klon repository'et.
+2. Følg `scripts/demo-env.sh.example` for at sætte miljøvariabler.
+3. Kør den primære automatiserede demo-rigger: `scripts/demo-run-m5.sh`.
+
+Denne repository demonstrerer en komplet RHEL 10 Image Mode flow: byggede bootc images bliver signeret/pushet til Quay, materialiseret som QCOW2 containerDisks, anvendt til lokale UTM- eller OpenShift Virtualization-VMs, og koordineret gennem en M5 demo-orchestrator, der viser image promotion, container smoke-test, VM provisioning, rolling fleet update, chatbot/logging integration og rollback handling.
 
 **Vigtigt:**
 *   **Secrets:** Sørg for at opsætte GitHub Secrets (`QUAY_USERNAME`, `QUAY_TOKEN`, etc.) og GitHub Variables (`QUAY_IMAGE`).
@@ -182,16 +184,18 @@ See [section 9 of the demo script](docs/demo-script.md#9-openshift-virtualizatio
 
 ## Running the automated demo script
 
+The primary automated demo entry point in this repository is `scripts/demo-run-m5.sh`. It drives the end-to-end presentation workflow: image inspection, container smoke-test, VM reachability checks, Quay image promotion, fleet updates, and optional chatbot or OpenShift virtualization extension hooks.
+
 ```bash
 # Full run from the start
-./scripts/demo-run.sh
+./scripts/demo-run-m5.sh
 
 # Restart from a specific step (e.g. after step 9a fails)
-START_STEP=9a ./scripts/demo-run.sh
+START_STEP=9a ./scripts/demo-run-m5.sh
 ```
 
 Valid step IDs: `1 2 2b 3 4 5 6 7a 7b 7c 7d 8 9a 9b`
 
 Step 4 pushes the ARM64 image/signs it, then dispatches `build-qcow2.yml` in the background (and, on macOS, opens an iTerm2 pane tailing `disk-build.log`) so the AMD64 containerDisk build runs in parallel while the demo continues through steps 5–8. Step 9a assumes that background build has already completed.
 
-Copy `scripts/demo-env.sh.example` to `scripts/demo-env.sh` (gitignored) and fill in your values — it pre-sets the full ARM64/AMD64 variable set (`IMAGE_ARM`, `IMAGE_AMD`, `DISK_IMAGE_ARM`, `DISK_IMAGE_AMD`, their `PROD_*` counterparts, `VM_SSH`, `SNO_API`, `SNO_TOKEN`, etc.) and is sourced automatically by `demo-run.sh`.
+Copy `scripts/demo-env.sh.example` to `scripts/demo-env.sh` (gitignored) and fill in your values — it pre-sets the full ARM64/AMD64 variable set (`IMAGE_ARM`, `IMAGE_AMD`, `DISK_IMAGE_ARM`, `DISK_IMAGE_AMD`, their `PROD_*` counterparts, `VM_SSH`, `SNO_API`, `SNO_TOKEN`, etc.) and is sourced automatically by `demo-run-m5.sh`.

@@ -146,7 +146,64 @@ check_images() {
   echo ""
 }
 
+# ── Trin-spring-logik for demo-run-m5.sh ─────────────────────────────────────
+STEP_ORDER=(1 2 2b 2c 3 4 5 6 7 8 9 10 11)
+_STEP_REACHED=0
+
+step_index() {
+  local target="$1"
+  local idx=0
+  local step
+  for step in "${STEP_ORDER[@]}"; do
+    if [[ "${step}" == "${target}" ]]; then
+      echo "${idx}"
+      return 0
+    fi
+    ((idx++))
+  done
+  echo "-1"
+}
+
+should_run() {
+  local id="$1"
+  local start_step="${START_STEP:-}"
+  local current_index target_index
+
+  if [[ -z "${start_step}" || "${_STEP_REACHED}" -eq 1 ]]; then
+    _STEP_REACHED=1
+    return 0
+  fi
+
+  current_index="$(step_index "${id}")"
+  target_index="$(step_index "${start_step}")"
+
+  if [[ "${current_index}" == "-1" ]]; then
+    echo -e "${RED}  ⚠  Ukendt trin-ID ${id}; kører det alligevel${RESET}"
+    _STEP_REACHED=1
+    return 0
+  fi
+
+  if [[ "${target_index}" == "-1" ]]; then
+    echo -e "${RED}  ⚠  Ukendt START_STEP=${start_step}; kører fra begyndelsen${RESET}"
+    _STEP_REACHED=1
+    return 0
+  fi
+
+  if [[ "${current_index}" -ge "${target_index}" ]]; then
+    _STEP_REACHED=1
+    return 0
+  fi
+
+  echo -e "${BLUE}  ⏭  Springer trin ${id} over (START_STEP=${START_STEP})${RESET}"
+  return 1
+}
+
 # ── Intro ─────────────────────────────────────────────────────────────────────
+if [[ -n "${START_STEP:-}" ]]; then
+  echo -e "${YELLOW}  ⏩  START_STEP=${START_STEP} — springer trin over før '${START_STEP}'${RESET}"
+  echo ""
+fi
+
 clear
 echo -e "${CYAN}${BOLD}"
 echo "  ╔══════════════════════════════════════════════════════════════╗"
@@ -172,6 +229,7 @@ check_images
 pause "Tryk ENTER for at starte demoen..."
 
 # ── TRIN 1 ────────────────────────────────────────────────────────────────────
+if should_run 1; then
 step 1 "Se imagemodellen"
 ascii "  REPOSITORYET ER SANDHEDSKILDEN"
 ascii "  ─────────────────────────────────────────────────────────"
@@ -217,8 +275,10 @@ say "Repository'et definerer operativsystemet som et bootbart image."
 say "Et golden image genbruges af service- og webside-images."
 say "VM'en er en udrulet version af et image – ikke kilden til sandhed."
 pause "Tryk ENTER for at fortsætte..."
+fi
 
 # ── TRIN 2 ────────────────────────────────────────────────────────────────────
+if should_run 2; then
 step 2 "Test image som container"
 
 ascii "  SAMME IMAGE, TO RUNTIMES"
@@ -249,8 +309,10 @@ run podman rm -f bootc-demo-test 2>/dev/null || true
 run podman run --rm -d --name bootc-demo-test -p 8080:80 "${IMAGE_GOOD}"
 pause "Åbner http://localhost:8080 i en browser, tryk derefter ENTER..."
 run podman stop bootc-demo-test
+fi
 
 # ── TRIN 2b ───────────────────────────────────────────────────────────────────
+if should_run 2b; then
 step "2b" "Verificer signering og digest i Quay"
 
 ascii "  TRUSTED IMAGE"
@@ -286,8 +348,10 @@ cosign verify \
   "${IMAGE_GOOD}" 2>&1 | head -20 || \
   note "Signatur ikke fundet for dette tag – signer med: IMAGE=${IMAGE_GOOD} ./scripts/local-sign-keyless.sh eller med COSIGN_KEY/COSIGN_PUB/COSIGN_CERT"
 pause "Quay – digest, tag og signering. Tryk ENTER for at fortsætte..."
+fi
 
 # ── TRIN 2c ───────────────────────────────────────────────────────────────────
+if should_run 2c; then
 step "2c" "Promover dev → prod (gh workflow dispatch)"
 
 ascii "  PROMOVERING ER IKKE ET NYT BUILD"
@@ -321,8 +385,10 @@ run gh workflow run promote-prod.yml \
 note "Følger fremgang..."
 run gh run watch --repo waltherB/rhel10-bootc-github-quay-demo || true
 pause "Promovering flytter referencen – den genbygger ikke indholdet. Tryk ENTER..."
+fi
 
 # ── TRIN 3 ────────────────────────────────────────────────────────────────────
+if should_run 3; then
 step 3 "Inspicer den kørende UTM VM"
 
 ascii "  IMAGE BLIVER TIL ET KØRENDE OS"
@@ -345,8 +411,10 @@ pause "Tryk ENTER for at fortsætte..."
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
+fi
 
 # ── TRIN 4 ────────────────────────────────────────────────────────────────────
+if should_run 4; then
 step 4 "Test AI-chatbot som container"
 ascii "  Det er så moderne med AI så lige et eksempel AI Lab Recipes chatbot (llama.cpp + Streamlit UI)"
 ascii "  Vi tester den som en container, inden vi bager den ind i OS-image."
@@ -380,8 +448,10 @@ if [[ "${RUN_CHATBOT_EXTENSION}" == "1" ]]; then
 else
   note "RUN_CHATBOT_EXTENSION=0; springer chatbot-test over."
 fi
+fi
 
 # ── TRIN 5 ────────────────────────────────────────────────────────────────────
+if should_run 5; then
 step 5 "Udrul chatbotten via en bootc-opdatering"
 ascii ""
 
@@ -425,8 +495,10 @@ else
   run remote sudo systemctl list-unit-files --all | grep -Ei 'chatbot|llamacpp' || true
   note "Chatbotten burde være tilgængelig på VM'ens port ${CHATBOT_PORT}."
 fi
+fi
 
 # ── TRIN 6 ────────────────────────────────────────────────────────────────────
+if should_run 6; then
 step 6 "Inspicer den opdaterede VM"
 
 ascii "  Efter genstart kører VM'en det nye image:"
@@ -454,8 +526,10 @@ pause "Tryk ENTER for at fortsætte..."
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
+fi
 
 # ── TRIN 7 ────────────────────────────────────────────────────────────────────
+if should_run 7; then
 step 7 "Udrul en bevidst ødelagt version"
 
 ascii "  FEJLBEHÆFTET RELEASE"
@@ -492,8 +566,10 @@ run remote sudo systemctl --no-pager --full status httpd || true
 run remote curl -fsS http://localhost | lynx -stdin -dump || true
 run remote sudo bootc status
 pause
+fi
 
 # ── TRIN 8 ────────────────────────────────────────────────────────────────────
+if should_run 8; then
 step 8 "Rul tilbage til den kendte gode deployment"
 
 ascii "  Én kommando, én genstart – tilbage til en kendt god tilstand:"
@@ -528,8 +604,10 @@ wait_for_vm
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
+fi
 
 # ── TRIN 9 ────────────────────────────────────────────────────────────────────
+if should_run 9; then
 step 9 "Udrul det rettede image"
 
 ascii "  FIXET LEVERES SOM EN NY VERSION"
@@ -558,9 +636,10 @@ wait_for_vm
 run remote sudo bootc status
 run remote curl -fsS http://localhost | lynx -stdin -dump
 pause
+fi
 
 # ── TRIN 10 ───────────────────────────────────────────────────────────────────
-if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
+if should_run 10 && [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
   step 10 "Én repo-opdatering, mange VM-udrulninger"
 
   ascii "  Det samme testede image anvendes på en flåde – demo-fleet-update-m5.sh:"
@@ -591,7 +670,7 @@ if [[ "${RUN_FLEET_EXTENSION}" == "1" ]]; then
 fi
 
 # ── TRIN 11 Deploy til OopenShift Virtulization ────────────────────────────────────────────────────
-if [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
+if should_run 11 && [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
   step 11 "Den samme model på OpenShift Virtualization"
 
   ascii "  Den lokale demo brugte ARM64 i UTM; SNO kører AMD64-image nativt:"
