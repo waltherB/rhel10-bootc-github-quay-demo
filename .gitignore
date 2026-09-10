@@ -12,3 +12,5 @@ ctxdir/disk-arm.qcow2
 output/qcow2/disk-arm.qcow2
 cosign/*
 !cosign/.gitkeep
+*.qcow2
+actions-runner/*
