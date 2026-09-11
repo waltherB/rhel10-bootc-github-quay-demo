@@ -59,8 +59,9 @@ COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
 COPY scripts/vm-status.sh /usr/local/bin/vm-status
 COPY scripts/vm-upgrade.sh /usr/local/bin/vm-upgrade
+COPY files/resolv.conf /etc/resolv.conf
 RUN chmod +x /usr/local/bin/vm-status /usr/local/bin/vm-upgrade
-
+RUN chmod 0644 /etc/resolv.conf
 RUN systemctl enable httpd serial-getty@tty1.service
 
 RUN echo 'u demo 1000 "Demo User" /home/demo /bin/bash' > /usr/lib/sysusers.d/demo.conf
