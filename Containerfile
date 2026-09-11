@@ -36,12 +36,14 @@ RUN set -ex; \
       selinux-policy-targeted \
       qemu-guest-agent \
       podman \
-      python3-pip \
+      python3-pip \   
       python3-devel \
       git \
       libffi-devel \
       openssl-devel \
-      policycoreutils --nogpgcheck; \
+      policycoreutils --nogpgcheck \
+      NetworkManager \
+      systemd-resolved --nogpgcheck  \
     dnf update -y; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
