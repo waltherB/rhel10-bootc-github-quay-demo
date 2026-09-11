@@ -24,7 +24,7 @@ RUN set -ex; \
     else \
       echo "RHSM_ACTIVATION_KEY or RHSM_ORG not provided - continuing but dnf may fail"; \
     fi; \
-    dnf -y install \
+    dnf -y install --nogpgcheck \
       httpd \
       firewalld \
       jq \
@@ -36,14 +36,14 @@ RUN set -ex; \
       selinux-policy-targeted \
       qemu-guest-agent \
       podman \
-      python3-pip \   
+      python3-pip \
       python3-devel \
       git \
       libffi-devel \
       openssl-devel \
-      policycoreutils --nogpgcheck \
+      policycoreutils \
       NetworkManager \
-      systemd-resolved --nogpgcheck  \
+      systemd-resolved; \
     dnf update -y; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
