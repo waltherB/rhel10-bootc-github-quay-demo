@@ -42,8 +42,7 @@ RUN set -ex; \
       libffi-devel \
       openssl-devel \
       policycoreutils \
-      NetworkManager \
-      systemd-resolved; \
+      NetworkManager; \
     dnf update -y; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
