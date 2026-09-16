@@ -296,17 +296,17 @@
         namespace: "{{ vm_namespace }}"
       register: dv
       until: 
-        - dv.resources | length > 0
-        - dv.resources[0].status.phase is defined
-        - dv.resources[0].status.phase != "Failed"
+        - dv.get('resources', []) | length > 0
+        - (dv.get('resources') or [{}])[0].status.phase is defined
+        - (dv.get('resources') or [{}])[0].status.phase != "Failed"
       retries: 30
       delay: 10
 
     - name: Show DataVolume status
       debug:
         msg: 
-          - "DataVolume Phase: {{ dv.resources[0].status.phase | default('Unknown') }}"
-          - "DataVolume Progress: {{ dv.resources[0].status.progress | default('N/A') }}"
+          - "DataVolume Phase: {{ (dv.get('resources') or [{}])[0].status.phase | default('Unknown') }}"
+          - "DataVolume Progress: {{ (dv.get('resources') or [{}])[0].status.progress | default('N/A') }}"
 
     - name: Wait for DataVolume import to complete
       kubernetes.core.k8s_info:
@@ -316,8 +316,8 @@
         namespace: "{{ vm_namespace }}"
       register: dv
       until: >
-        dv.resources | length > 0 and
-        dv.resources[0].status.phase == "Succeeded"
+        dv.get('resources', []) | length > 0 and
+        (dv.get('resources') or [{}])[0].status.phase == "Succeeded"
       retries: 180
       delay: 10
 
@@ -384,7 +384,7 @@
         label_selectors:
           - "app.kubernetes.io/component=importer"
       register: importer_pods
-      when: dv.resources[0].status.phase == "Succeeded"
+      when: (dv.get('resources') or [{}])[0].status.phase == "Succeeded"
 
     - name: Show importer pod status if available
       debug:
