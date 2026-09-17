@@ -238,7 +238,6 @@
                 labels:
                   kubevirt.io/vm: "{{ vm_name }}"
               spec:
-                serviceAccountName: bootc-vm-sa
                 domain:
                   # bootc/RHEL 10 images are GPT/EFI-only; without this KubeVirt
                   # defaults to SeaBIOS, which cannot boot a GPT disk and hangs
