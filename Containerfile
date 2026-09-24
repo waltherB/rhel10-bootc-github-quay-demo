@@ -48,7 +48,9 @@ RUN set -ex; \
       kbd \
       xkeyboard-config; \
     dnf update -y; \
+    \
     echo "KEYMAP=dk-mac" > /etc/vconsole.conf; \
+    \
     mkdir -p /etc/X11/xorg.conf.d; \
     echo 'Section "InputClass"' > /etc/X11/xorg.conf.d/00-keyboard.conf; \
     echo '        Identifier "system-keyboard"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
@@ -56,8 +58,8 @@ RUN set -ex; \
     echo '        Option "XkbLayout" "dk"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
     echo '        Option "XkbModel" "pc105"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
     echo '        Option "XkbVariant" "mac"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo 'EndSection' >> /etc/X11/xorg.conf.d/00-keyboard.conf
-
+    echo 'EndSection' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+    \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
         subscription-manager unregister || true; \
