@@ -23,6 +23,26 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Configure local Cosign key
+        env:
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          if [[ -z "${COSIGN_PRIVATE_KEY}" ]]; then
+            echo "ERROR: COSIGN_PRIVATE_KEY Actions secret is not set."
+            exit 1
+          fi
+          export COSIGN_KEY="${RUNNER_TEMP}/cosign.key"
+          export COSIGN_PUB="${RUNNER_TEMP}/cosign.pub"
+          printf '%s\n' "${COSIGN_PRIVATE_KEY}" > "${COSIGN_KEY}"
+          chmod 600 "${COSIGN_KEY}"
+          cosign public-key --key "${COSIGN_KEY}" > "${COSIGN_PUB}"
+          echo "COSIGN_KEY=${COSIGN_KEY}" >> "${GITHUB_ENV}"
+          echo "COSIGN_PUB=${COSIGN_PUB}" >> "${GITHUB_ENV}"
+
       # Wipe any storage state the runner image may have pre-seeded
       - name: Reset container storage
         run: |
@@ -110,6 +130,22 @@ jobs:
 
       - name: Push containerDisk image to Quay
         run: sudo podman push ${{ env.DISK_IMAGE_AMD }}
+
+      - name: Sign and verify AMD64 images with the local Cosign key
+        env:
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+          QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
+          QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
+        run: |
+          cosign login quay.io \
+            -u "${QUAY_USERNAME}" \
+            -p "${QUAY_TOKEN}"
+
+          cosign sign --key "${COSIGN_KEY}" "${IMAGE_AMD}"
+          cosign verify --key "${COSIGN_PUB}" "${IMAGE_AMD}"
+
+          cosign sign --key "${COSIGN_KEY}" "${DISK_IMAGE_AMD}"
+          cosign verify --key "${COSIGN_PUB}" "${DISK_IMAGE_AMD}"
 
       - name: Upload AMD64 qcow2 Artifact
         uses: actions/upload-artifact@v4
