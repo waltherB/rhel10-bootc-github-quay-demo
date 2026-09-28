@@ -114,13 +114,18 @@ if [[ "${ADD_CHATBOT}" == "1" ]]; then
   [[ -d "${RECIPE_DIR}" ]] || { echo "ERROR: chatbot recipe not found: ${RECIPE_DIR}" >&2; exit 1; }
   command -v make >/dev/null 2>&1 || { echo "ERROR: make is required for the AI Lab recipe." >&2; exit 1; }
   make -C "${RECIPE_DIR}" quadlet
-  for artifact in chatbot.kube chatbot.yaml chatbot.image; do
+  for artifact in chatbot.kube chatbot.yaml; do
     [[ -s "${RECIPE_DIR}/build/${artifact}" ]] || {
       echo "ERROR: AI Lab Recipes did not generate ${artifact}." >&2
       exit 1
     }
   done
-  cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${RECIPE_DIR}/build/chatbot.image" "${TMP_DIR}/update/"
+  # Keep the generated quadlet pod definition but do not copy the auto-generated
+  # chatbot.image unit into the bootc image. The .image service is what fails at
+  # boot in this VM setup, while the actual pod definition is the part we need for
+  # the demo. The app and model images are pulled from Quay at runtime or are
+  # already published, so the extra image-prepull service is unnecessary here.
+  cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${TMP_DIR}/update/"
 fi
 
 if [[ "${REBUILD_GOOD}" == "1" ]] || ! podman image exists "${IMAGE_GOOD}"; then
@@ -152,7 +157,7 @@ fi
 cat > "${TMP_DIR}/update/Containerfile" <<EOF
 FROM ${IMAGE_GOOD}
 COPY index.html /var/www/html/index.html
-COPY chatbot.kube chatbot.yaml chatbot.image /usr/share/containers/systemd/
+COPY chatbot.kube chatbot.yaml /usr/share/containers/systemd/
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v2"
 EOF
 
