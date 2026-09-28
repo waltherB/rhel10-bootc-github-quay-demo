@@ -30,7 +30,7 @@ IMAGE="quay.io/example:demo" \
   exit 1
 }
 
-grep -q 'local key/public-key or X.509 certificate mode selected' "$TMP_DIR/out.txt"
+grep -q 'local key/public-key mode selected' "$TMP_DIR/out.txt"
 
 grep -q 'cosign sign --key' "$TMP_DIR/out.txt"
 

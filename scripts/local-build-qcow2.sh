@@ -17,6 +17,7 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 # Preserve explicit command-line environment overrides while loading defaults.
 IMAGE_ARM_OVERRIDE="${IMAGE_ARM-}"
 IMAGE_ARM_WAS_SET="${IMAGE_ARM+x}"
@@ -36,12 +37,30 @@ if [[ -n "${PLATFORM_WAS_SET}" ]]; then TARGET_PLATFORM_LOCAL="${PLATFORM_OVERRI
 IMAGE_ARM="${IMAGE_ARM:-quay.io/waba/bootc-guide:dev-arm64}"
 DISK_IMAGE_ARM="${DISK_IMAGE_ARM:-quay.io/waba/bootc-guide:dev-disk-arm64}"
 PLATFORM="${TARGET_PLATFORM_LOCAL:-linux/arm64}"
+COSIGN_KEY="${COSIGN_KEY:-${REPO_DIR}/cosign/cosign.key}"
+COSIGN_PUB="${COSIGN_PUB:-${REPO_DIR}/cosign/cosign.pub}"
 
 echo ""
 echo "  SOURCE IMAGE : ${IMAGE_ARM}"
 echo "  OUTPUT DISK  : ${DISK_IMAGE_ARM}"
 echo "  PLATFORM     : ${PLATFORM}"
 echo ""
+
+for command in cosign skopeo; do
+  if ! command -v "${command}" >/dev/null 2>&1; then
+    echo "  ERROR: required command not found: ${command}" >&2
+    exit 1
+  fi
+done
+
+if [[ ! -f "${COSIGN_KEY}" ]]; then
+  echo "  ERROR: Cosign private key not found: ${COSIGN_KEY}" >&2
+  exit 1
+fi
+if [[ ! -f "${COSIGN_PUB}" ]]; then
+  echo "  ERROR: Cosign public key not found: ${COSIGN_PUB}" >&2
+  exit 1
+fi
 
 podman login registry.redhat.io
 podman login quay.io
@@ -151,6 +170,15 @@ podman build -q \
 
 podman push "${DISK_IMAGE_ARM}"
 
+echo "  Signing and verifying ${DISK_IMAGE_ARM} with the configured local Cosign key"
+(
+  cd "${REPO_DIR}"
+  IMAGE="${DISK_IMAGE_ARM}" \
+  COSIGN_KEY="${COSIGN_KEY}" \
+  COSIGN_PUB="${COSIGN_PUB}" \
+    ./scripts/local-sign-keyless.sh
+)
+
 echo ""
-echo "  Pushed ${DISK_IMAGE_ARM}"
+echo "  Pushed and signed ${DISK_IMAGE_ARM}"
 echo ""

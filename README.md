@@ -102,11 +102,12 @@ export IMAGE_ARM=quay.io/waba/bootc-guide:dev-arm64
 ./scripts/local-build.sh          # build OCI bootc image, native arm64
 ./scripts/local-test.sh           # smoke test as container
 ./scripts/local-push.sh           # push :dev-arm64 to Quay
-./scripts/local-sign-keyless.sh   # sign with keyless Cosign
+./scripts/local-sign-keyless.sh   # sign with the configured local key or keyless Cosign
 ./scripts/local-build-qcow2.sh    # convert to qcow2 natively (arm64), push containerDisk to Quay
 ```
 
 > **Note:** `cosign` uses its own credential store — run `cosign login` separately from `podman login`.  
+> `local-build-qcow2.sh` signs and verifies its pushed containerDisk using `cosign/cosign.key` and `cosign/cosign.pub` (or `COSIGN_KEY`/`COSIGN_PUB`). The GitHub Actions workflow signs and verifies both AMD64 artifacts using the `COSIGN_PRIVATE_KEY` and `COSIGN_PASSWORD` Actions secrets.
 > Podman auth is stored in `~/.config/containers/auth.json` on macOS.  
 > `bootc-image-builder` requires a **rootful** Podman Machine on macOS (`podman machine set --rootful`) — `local-build-qcow2.sh` checks this and fails fast with the fix if it's rootless.
 
