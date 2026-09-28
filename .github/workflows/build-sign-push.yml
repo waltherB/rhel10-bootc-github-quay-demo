@@ -133,6 +133,7 @@ jobs:
 
       - name: Sign and verify AMD64 images with the local Cosign key
         env:
+          COSIGN_YES: "true"
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
           QUAY_USERNAME: ${{ secrets.QUAY_USERNAME }}
           QUAY_TOKEN: ${{ secrets.QUAY_TOKEN }}
