@@ -129,11 +129,15 @@ After=network-online.target
 RequiresMountsFor=/var/lib/containers
 
 [Service]
-Type=oneshot
-RemainAfterExit=yes
-ExecStart=/usr/bin/podman kube play /usr/share/containers/systemd/chatbot.yaml
+Type=simple
+ExecStartPre=/usr/bin/podman image pull quay.io/ai-lab/granite-7b-lab:latest
+ExecStartPre=/usr/bin/podman image pull quay.io/ai-lab/llamacpp_python:latest
+ExecStartPre=/usr/bin/podman image pull quay.io/ai-lab/chatbot:latest
+ExecStart=/usr/bin/podman kube play --replace /usr/share/containers/systemd/chatbot.yaml
 ExecStop=/usr/bin/podman kube down /usr/share/containers/systemd/chatbot.yaml
 Restart=on-failure
+RestartSec=30
+TimeoutStartSec=600
 
 [Install]
 WantedBy=multi-user.target
