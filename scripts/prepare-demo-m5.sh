@@ -13,7 +13,7 @@ fi
 
 : "${QUAY_REPO:=quay.io/waba/bootc-guide}"
 : "${IMAGE_GOOD:=${QUAY_REPO}:demo-v1-arm64}"
-: "${IMAGE_UPDATE:=${QUAY_REPO}:demo-v2-arm64}"
+: "${IMAGE_UPDATE:=${QUAY_REPO}:demo-v2-chatbot-arm64}"
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
 : "${DISK_IMAGE_GOOD:=${QUAY_REPO}:demo-v1-disk-arm64}"
@@ -114,13 +114,32 @@ if [[ "${ADD_CHATBOT}" == "1" ]]; then
   [[ -d "${RECIPE_DIR}" ]] || { echo "ERROR: chatbot recipe not found: ${RECIPE_DIR}" >&2; exit 1; }
   command -v make >/dev/null 2>&1 || { echo "ERROR: make is required for the AI Lab recipe." >&2; exit 1; }
   make -C "${RECIPE_DIR}" quadlet
-  for artifact in chatbot.kube chatbot.yaml chatbot.image; do
+  for artifact in chatbot.kube chatbot.yaml; do
     [[ -s "${RECIPE_DIR}/build/${artifact}" ]] || {
       echo "ERROR: AI Lab Recipes did not generate ${artifact}." >&2
       exit 1
     }
   done
-  cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${RECIPE_DIR}/build/chatbot.image" "${TMP_DIR}/update/"
+
+  cat > "${TMP_DIR}/update/chatbot.service" <<'EOF'
+[Unit]
+Description=Chatbot pod from AI Lab recipe
+Wants=network-online.target
+After=network-online.target
+RequiresMountsFor=/var/lib/containers
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/bin/podman kube play /usr/share/containers/systemd/chatbot.yaml
+ExecStop=/usr/bin/podman kube down /usr/share/containers/systemd/chatbot.yaml
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+  cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${TMP_DIR}/update/"
 fi
 
 if [[ "${REBUILD_GOOD}" == "1" ]] || ! podman image exists "${IMAGE_GOOD}"; then
@@ -152,7 +171,7 @@ fi
 cat > "${TMP_DIR}/update/Containerfile" <<EOF
 FROM ${IMAGE_GOOD}
 COPY index.html /var/www/html/index.html
-COPY chatbot.kube chatbot.yaml chatbot.image /usr/share/containers/systemd/
+COPY chatbot.kube chatbot.yaml chatbot.service /usr/share/containers/systemd/
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v2"
 EOF
 
