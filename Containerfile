@@ -56,8 +56,7 @@ RUN set -ex; \
     echo '        Option "XkbLayout" "dk"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
     echo '        Option "XkbModel" "pc105"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
     echo '        Option "XkbVariant" "mac"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo 'EndSection' >> /etc/X11/xorg.conf.d/00-keyboard.conf
-
+    echo 'EndSection' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
     if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
       if subscription-manager identity >/dev/null 2>&1; then \
         subscription-manager unregister || true; \
@@ -67,7 +66,7 @@ RUN set -ex; \
         mv "${rhsm_config_file}.bak" "$rhsm_config_file"; \
       fi; \
       rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
-    fi 
+    fi
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
 COPY scripts/vm-status.sh /usr/local/bin/vm-status
