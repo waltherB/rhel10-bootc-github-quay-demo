@@ -94,8 +94,6 @@ RUN echo 'demo:redhat' | chpasswd && \
 RUN systemctl enable httpd
 
 COPY files/99-dns.conf /etc/NetworkManager/conf.d/99-dns.conf
-COPY files/demo-dns.nmconnection /etc/NetworkManager/system-connections/demo-dns.nmconnection
-RUN chmod 0600 /etc/NetworkManager/system-connections/demo-dns.nmconnection
 
 RUN echo "KEYMAP=dk-mac_nodeadkeys" > /etc/vconsole.conf
 
