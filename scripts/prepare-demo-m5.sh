@@ -180,6 +180,8 @@ RUN mkdir -p /usr/share/www/html /usr/lib/tmpfiles.d && \
 COPY index.html /usr/share/www/html/index.html
 COPY index.html /var/www/html/index.html
 $([[ "${ADD_CHATBOT}" == "1" ]] && echo "COPY chatbot.kube chatbot.yaml /usr/share/containers/systemd/")
+$([[ "${ADD_CHATBOT}" == "1" ]] && echo "RUN mkdir -p /etc/systemd/system/multi-user.target.wants && \\")
+$([[ "${ADD_CHATBOT}" == "1" ]] && echo "    ln -sf /usr/share/containers/systemd/chatbot.kube /etc/systemd/system/multi-user.target.wants/chatbot.service")
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v2"
 EOF
 
