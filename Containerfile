@@ -67,6 +67,10 @@ RUN set -ex; \
       fi; \
       rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
     fi
+
+RUN mkdir -p /usr/share/www/html /usr/lib/tmpfiles.d && \
+    echo 'L+ /var/www/html/index.html - - - - /usr/share/www/html/index.html' > /usr/lib/tmpfiles.d/00-demo-html.conf
+COPY app/index.html /usr/share/www/html/index.html
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
 COPY scripts/vm-status.sh /usr/local/bin/vm-status

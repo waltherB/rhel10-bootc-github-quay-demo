@@ -121,29 +121,30 @@ if [[ "${ADD_CHATBOT}" == "1" ]]; then
     }
   done
 
-  cat > "${TMP_DIR}/update/chatbot.service" <<'EOF'
+  cp "${RECIPE_DIR}/build/chatbot.yaml" "${TMP_DIR}/update/"
+
+  # Configure chatbot.kube:
+  # 1. WantedBy=multi-user.target (so it does NOT block default.target or system boot)
+  # 2. TimeoutStartSec=1800 (allows time to pull the ~7.3GB AI models from Quay in the background)
+  # 3. Restart=on-failure
+  cat > "${TMP_DIR}/update/chatbot.kube" <<'EOF'
 [Unit]
 Description=Chatbot pod from AI Lab recipe
 Wants=network-online.target
 After=network-online.target
-RequiresMountsFor=/var/lib/containers
+RequiresMountsFor=%t/containers
+
+[Kube]
+Yaml=chatbot.yaml
 
 [Service]
-Type=simple
-ExecStartPre=/usr/bin/podman image pull quay.io/ai-lab/granite-7b-lab:latest
-ExecStartPre=/usr/bin/podman image pull quay.io/ai-lab/llamacpp_python:latest
-ExecStartPre=/usr/bin/podman image pull quay.io/ai-lab/chatbot:latest
-ExecStart=/usr/bin/podman kube play --replace /usr/share/containers/systemd/chatbot.yaml
-ExecStop=/usr/bin/podman kube down /usr/share/containers/systemd/chatbot.yaml
 Restart=on-failure
 RestartSec=30
-TimeoutStartSec=600
+TimeoutStartSec=1800
 
 [Install]
 WantedBy=multi-user.target
 EOF
-
-  cp "${RECIPE_DIR}/build/chatbot.kube" "${RECIPE_DIR}/build/chatbot.yaml" "${TMP_DIR}/update/"
 fi
 
 if [[ "${REBUILD_GOOD}" == "1" ]] || ! podman image exists "${IMAGE_GOOD}"; then
@@ -174,8 +175,11 @@ fi
 
 cat > "${TMP_DIR}/update/Containerfile" <<EOF
 FROM ${IMAGE_GOOD}
+RUN mkdir -p /usr/share/www/html /usr/lib/tmpfiles.d && \
+    echo 'L+ /var/www/html/index.html - - - - /usr/share/www/html/index.html' > /usr/lib/tmpfiles.d/00-demo-html.conf
+COPY index.html /usr/share/www/html/index.html
 COPY index.html /var/www/html/index.html
-COPY chatbot.kube chatbot.yaml chatbot.service /usr/share/containers/systemd/
+$([[ "${ADD_CHATBOT}" == "1" ]] && echo "COPY chatbot.kube chatbot.yaml /usr/share/containers/systemd/")
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v2"
 EOF
 
@@ -193,13 +197,16 @@ EOF
 
 cat > "${TMP_DIR}/broken/Containerfile" <<EOF
 FROM ${IMAGE_UPDATE}
-RUN rm -f /etc/systemd/system/multi-user.target.wants/httpd.service
+RUN systemctl mask httpd
 LABEL org.opencontainers.image.title="RHEL Image Mode demo broken"
 EOF
 
 cat > "${TMP_DIR}/fixed/Containerfile" <<EOF
 FROM ${IMAGE_UPDATE}
-RUN systemctl enable httpd
+RUN systemctl unmask httpd && systemctl enable httpd
+RUN mkdir -p /usr/share/www/html /usr/lib/tmpfiles.d && \
+    echo 'L+ /var/www/html/index.html - - - - /usr/share/www/html/index.html' > /usr/lib/tmpfiles.d/00-demo-html.conf
+COPY index.html /usr/share/www/html/index.html
 COPY index.html /var/www/html/index.html
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v3 fixed"
 EOF

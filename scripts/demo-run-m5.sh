@@ -338,15 +338,19 @@ pause "Tryk ENTER for at fortsætte..."
 run skopeo inspect --raw "docker://${IMAGE_GOOD}" | python3 -m json.tool 2>/dev/null | head -30 || \
 run skopeo inspect --raw "docker://${IMAGE_GOOD}" | head -30
 note "Cosign-verificering:"
-run cosign verify \
-  --certificate-identity-regexp="https://github.com/waltherB/rhel10-bootc-github-quay-demo" \
-  --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
-  "${IMAGE_GOOD}" 2>&1 | head -20 || \
-cosign verify \
-  --certificate-identity-regexp=".*" \
-  --certificate-oidc-issuer-regexp=".*" \
-  "${IMAGE_GOOD}" 2>&1 | head -20 || \
-  note "Signatur ikke fundet for dette tag – signer med: IMAGE=${IMAGE_GOOD} ./scripts/local-sign-keyless.sh eller med COSIGN_KEY/COSIGN_PUB/COSIGN_CERT"
+if [[ -n "${COSIGN_PUB:-}" && -f "${COSIGN_PUB}" ]] && cosign verify --key "${COSIGN_PUB}" "${IMAGE_GOOD}" >/dev/null 2>&1; then
+  run cosign verify --key "${COSIGN_PUB}" "${IMAGE_GOOD}" 2>&1 | head -20
+else
+  run cosign verify \
+    --certificate-identity-regexp="https://github.com/waltherB/rhel10-bootc-github-quay-demo" \
+    --certificate-oidc-issuer="https://token.actions.githubusercontent.com" \
+    "${IMAGE_GOOD}" 2>&1 | head -20 || \
+  cosign verify \
+    --certificate-identity-regexp=".*" \
+    --certificate-oidc-issuer-regexp=".*" \
+    "${IMAGE_GOOD}" 2>&1 | head -20 || \
+    note "Signatur ikke fundet for dette tag – signer med: IMAGE=${IMAGE_GOOD} ./scripts/local-sign-keyless.sh eller med COSIGN_KEY/COSIGN_PUB/COSIGN_CERT"
+fi
 pause "Quay – digest, tag og signering. Tryk ENTER for at fortsætte..."
 fi
 
