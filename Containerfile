@@ -7,70 +7,70 @@ ARG DEMO_PUB_KEY
 ENV KEYMAP=dk-mac
 
 RUN set -ex; \
-    arch=$(uname -m); \
-    if [ "$arch" = "x86_64" ]; then \
-      repo_arch="x86_64"; \
-    elif [ "$arch" = "aarch64" ]; then \
-      repo_arch="aarch64"; \
-    else \
-      repo_arch="x86_64"; \
-    fi; \
-    if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
-      rhsm_config_file=$(find /usr/lib64 /usr/lib -name config.py | grep rhsm | head -n 1); \
-      if [ -f "$rhsm_config_file" ]; then \
-        cp "$rhsm_config_file" "${rhsm_config_file}.bak"; \
-        sed -i 's/\(def in_container() -> bool:\)/\1\n    return False/g' "$rhsm_config_file"; \
-      fi; \
-      subscription-manager register --force --activationkey="$RHSM_ACTIVATION_KEY" --org="$RHSM_ORG"; \
-      subscription-manager repos --enable=rhel-10-for-${repo_arch}-baseos-rpms --enable=rhel-10-for-${repo_arch}-appstream-rpms; \
-    else \
-      echo "RHSM_ACTIVATION_KEY or RHSM_ORG not provided - continuing but dnf may fail"; \
-    fi; \
-    dnf -y install --nogpgcheck \
-      httpd \
-      firewalld \
-      jq \
-      lynx \
-      curl \
-      vim-enhanced \
-      bash-completion \
-      sudo \
-      selinux-policy-targeted \
-      qemu-guest-agent \
-      podman \
-      python3-pip \
-      python3-devel \
-      git \
-      libffi-devel \
-      openssl-devel \
-      policycoreutils \
-      policycoreutils-python-utils \
-      NetworkManager \
-      kbd \
-      xkeyboard-config; \
-    dnf update -y; \
-    echo "KEYMAP=dk-mac" > /etc/vconsole.conf; \
-    mkdir -p /etc/X11/xorg.conf.d; \
-    echo 'Section "InputClass"' > /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo '        Identifier "system-keyboard"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo '        MatchIsKeyboard "on"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo '        Option "XkbLayout" "dk"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo '        Option "XkbModel" "pc105"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo '        Option "XkbVariant" "mac"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    echo 'EndSection' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
-    if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
-      if subscription-manager identity >/dev/null 2>&1; then \
-        subscription-manager unregister || true; \
-        subscription-manager clean || true; \
-      fi; \
-      if [ -f "${rhsm_config_file}.bak" ]; then \
-        mv "${rhsm_config_file}.bak" "$rhsm_config_file"; \
-      fi; \
-      rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
-    fi
+  arch=$(uname -m); \
+  if [ "$arch" = "x86_64" ]; then \
+  repo_arch="x86_64"; \
+  elif [ "$arch" = "aarch64" ]; then \
+  repo_arch="aarch64"; \
+  else \
+  repo_arch="x86_64"; \
+  fi; \
+  if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
+  rhsm_config_file=$(find /usr/lib64 /usr/lib -name config.py | grep rhsm | head -n 1); \
+  if [ -f "$rhsm_config_file" ]; then \
+  cp "$rhsm_config_file" "${rhsm_config_file}.bak"; \
+  sed -i 's/\(def in_container() -> bool:\)/\1\n    return False/g' "$rhsm_config_file"; \
+  fi; \
+  subscription-manager register --force --activationkey="$RHSM_ACTIVATION_KEY" --org="$RHSM_ORG"; \
+  subscription-manager repos --enable=rhel-10-for-${repo_arch}-baseos-rpms --enable=rhel-10-for-${repo_arch}-appstream-rpms; \
+  else \
+  echo "RHSM_ACTIVATION_KEY or RHSM_ORG not provided - continuing but dnf may fail"; \
+  fi; \
+  dnf -y install --nogpgcheck \
+  httpd \
+  firewalld \
+  jq \
+  lynx \
+  curl \
+  vim-enhanced \
+  bash-completion \
+  sudo \
+  selinux-policy-targeted \
+  qemu-guest-agent \
+  podman \
+  python3-pip \
+  python3-devel \
+  git \
+  libffi-devel \
+  openssl-devel \
+  policycoreutils \
+  policycoreutils-python-utils \
+  NetworkManager \
+  kbd \
+  xkeyboard-config; \
+  dnf update -y; \
+  echo "KEYMAP=dk-mac" > /etc/vconsole.conf; \
+  mkdir -p /etc/X11/xorg.conf.d; \
+  echo 'Section "InputClass"' > /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  echo '        Identifier "system-keyboard"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  echo '        MatchIsKeyboard "on"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  echo '        Option "XkbLayout" "dk"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  echo '        Option "XkbModel" "pc105"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  echo '        Option "XkbVariant" "mac"' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  echo 'EndSection' >> /etc/X11/xorg.conf.d/00-keyboard.conf; \
+  if [ -n "$RHSM_ACTIVATION_KEY" ] && [ -n "$RHSM_ORG" ]; then \
+  if subscription-manager identity >/dev/null 2>&1; then \
+  subscription-manager unregister || true; \
+  subscription-manager clean || true; \
+  fi; \
+  if [ -f "${rhsm_config_file}.bak" ]; then \
+  mv "${rhsm_config_file}.bak" "$rhsm_config_file"; \
+  fi; \
+  rm -rf /etc/pki/entitlement /etc/pki/consumer || true; \
+  fi
 
 RUN mkdir -p /usr/share/www/html /usr/lib/tmpfiles.d && \
-    echo 'L+ /var/www/html/index.html - - - - /usr/share/www/html/index.html' > /usr/lib/tmpfiles.d/00-demo-html.conf
+  echo 'L+ /var/www/html/index.html - - - - /usr/share/www/html/index.html' > /usr/lib/tmpfiles.d/00-demo-html.conf
 COPY app/index.html /usr/share/www/html/index.html
 COPY app/index.html /var/www/html/index.html
 COPY files/motd /etc/motd
@@ -84,13 +84,13 @@ RUN echo 'u demo 1000 "Demo User" /home/demo /bin/bash' > /usr/lib/sysusers.d/de
 RUN systemd-sysusers && mkdir -p /var/home/demo && chown demo:demo /var/home/demo
 
 RUN echo 'demo:redhat' | chpasswd && \
-    echo 'demo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/demo && \
-    chmod 0440 /etc/sudoers.d/demo && \
+  echo 'demo ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/demo && \
+  chmod 0440 /etc/sudoers.d/demo && \
   test -n "$DEMO_PUB_KEY" && \
-    install -d -m 0755 /home/demo/.ssh && \
-    printf '%s\n' "$DEMO_PUB_KEY" > /home/demo/.ssh/authorized_keys && \
-    chown -R demo:demo /home/demo/.ssh && \
-    chmod 0600 /home/demo/.ssh/authorized_keys
+  install -d -m 0755 /home/demo/.ssh && \
+  printf '%s\n' "$DEMO_PUB_KEY" > /home/demo/.ssh/authorized_keys && \
+  chown -R demo:demo /home/demo/.ssh && \
+  chmod 0600 /home/demo/.ssh/authorized_keys
 
 RUN systemctl enable httpd
 
@@ -101,23 +101,23 @@ RUN chmod 600 /etc/NetworkManager/system-connections/demo-dns.nmconnection && ch
 # ----------------------------------------------------------------------
 # SELinux user mapping so the demo account can log in
 # ----------------------------------------------------------------------
-RUN semanage login -a -s unconfined_u demo && \
-    restorecon -R /home/demo
+#RUN semanage login -a -s unconfined_u demo && \
+#    restorecon -R /home/demo
 
 RUN echo "KEYMAP=dk-mac_nodeadkeys" > /etc/vconsole.conf
 
 RUN dnf remove -y \
-    kernel-debug \
-    kernel-debug-core \
-    kernel-debug-modules \
-    kernel-debug-modules-core || true
+  kernel-debug \
+  kernel-debug-core \
+  kernel-debug-modules \
+  kernel-debug-modules-core || true
 
 RUN dnf clean all && \
-    rm -rf /run/httpd /run/rhsm \
-           /var/cache/dnf/* \
-           /var/lib/dnf/history.sqlite* \
-           /var/lib/rhsm/cache/* /var/lib/rhsm/productid.js \
-           /var/log/dnf.librepo.log /var/log/dnf.log /var/log/dnf.rpm.log \
-           /var/log/hawkey.log /var/log/rhsm/rhsm.log
+  rm -rf /run/httpd /run/rhsm \
+  /var/cache/dnf/* \
+  /var/lib/dnf/history.sqlite* \
+  /var/lib/rhsm/cache/* /var/lib/rhsm/productid.js \
+  /var/log/dnf.librepo.log /var/log/dnf.log /var/log/dnf.rpm.log \
+  /var/log/hawkey.log /var/log/rhsm/rhsm.log
 
 #RUN bootc container lint
