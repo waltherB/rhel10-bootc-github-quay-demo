@@ -44,6 +44,7 @@ RUN set -ex; \
       libffi-devel \
       openssl-devel \
       policycoreutils \
+      policycoreutils-python-utils \
       NetworkManager \
       kbd \
       xkeyboard-config; \
@@ -94,6 +95,14 @@ RUN echo 'demo:redhat' | chpasswd && \
 RUN systemctl enable httpd
 
 COPY files/99-dns.conf /etc/NetworkManager/conf.d/99-dns.conf
+COPY files/demo-dns.nmconnection /etc/NetworkManager/system-connections/demo-dns.nmconnection
+RUN chmod 600 /etc/NetworkManager/system-connections/demo-dns.nmconnection && chown root:root /etc/NetworkManager/system-connections/demo-dns.nmconnection
+
+# ----------------------------------------------------------------------
+# SELinux user mapping so the demo account can log in
+# ----------------------------------------------------------------------
+RUN semanage login -a -s unconfined_u demo && \
+    restorecon -R /home/demo
 
 RUN echo "KEYMAP=dk-mac_nodeadkeys" > /etc/vconsole.conf
 

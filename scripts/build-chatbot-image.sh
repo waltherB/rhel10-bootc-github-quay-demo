@@ -82,6 +82,7 @@ done
 TMP_DIR="$(mktemp -d)"
 
 cp "${RECIPE_DIR}/build/chatbot.yaml" "${TMP_DIR}/"
+cp "${REPO_DIR}/files/demo-dns.nmconnection" "${TMP_DIR}/"
 
 # Configure chatbot.kube:
 # 1. WantedBy=multi-user.target (so it does NOT block default.target or system boot)
@@ -125,6 +126,10 @@ RUN mkdir -p /usr/share/www/html /usr/lib/tmpfiles.d && \
 COPY index.html /usr/share/www/html/index.html
 COPY index.html /var/www/html/index.html
 COPY chatbot.kube chatbot.yaml /usr/share/containers/systemd/
+# Add network configuration for the demo
+COPY demo-dns.nmconnection /etc/NetworkManager/system-connections/demo-dns.nmconnection
+RUN chmod 600 /etc/NetworkManager/system-connections/demo-dns.nmconnection && \
+    chown root:root /etc/NetworkManager/system-connections/demo-dns.nmconnection
 LABEL org.opencontainers.image.title="RHEL Image Mode demo v2"
 EOF
 

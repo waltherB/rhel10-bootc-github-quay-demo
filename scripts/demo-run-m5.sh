@@ -16,6 +16,7 @@ fi
 : "${IMAGE_UPDATE:=${QUAY_REPO}:demo-v2-chatbot-arm64}"
 : "${IMAGE_BROKEN:=${QUAY_REPO}:demo-broken-arm64}"
 : "${IMAGE_FIXED:=${QUAY_REPO}:demo-v3-fixed-arm64}"
+: "${PROD_IMAGE_ARM:=${QUAY_REPO}:prod-arm64}"
 : "${CHATBOT_PORT:=8501}"
 : "${RUN_CHATBOT_EXTENSION:=1}"
 : "${AI_LAB_RECIPES_DIR:=}"
@@ -123,6 +124,9 @@ show_config() {
 
 require_command podman
 require_command ssh
+require_command skopeo
+require_command cosign
+require_command lynx
 [[ -f "${VM_SSH_KEY}" ]] || {
   echo -e "${RED}  SSH-nøgle ikke fundet: ${VM_SSH_KEY}${RESET}" >&2
   exit 1
@@ -136,12 +140,21 @@ check_images() {
   local images=("${IMAGE_GOOD}" "${IMAGE_UPDATE}" "${IMAGE_BROKEN}" "${IMAGE_FIXED}")
 
   for img in "${images[@]}"; do
-    if podman inspect "$img" >/dev/null 2>&1; then
-      echo -e "${GREEN}  ✅ $img fundet${RESET}"
-    else
-      echo -e "${RED}  ❌ $img ikke fundet. Kør: podman pull $img${RESET}"
+    if ! podman image exists "$img"; then
+      echo -e "${YELLOW}  Henter manglende image: $img${RESET}"
+      podman pull "$img" || {
+        echo -e "${RED}  ❌ Kunne ikke hente $img fra Quay${RESET}" >&2
+        exit 1
+      }
+    fi
+
+    local architecture
+    architecture="$(podman image inspect --format '{{.Architecture}}' "$img")"
+    if [[ "${architecture}" != "arm64" ]]; then
+      echo -e "${RED}  ❌ $img har arkitekturen ${architecture}, forventede arm64${RESET}" >&2
       exit 1
     fi
+    echo -e "${GREEN}  ✅ $img fundet (arm64)${RESET}"
   done
   echo ""
 }
@@ -356,14 +369,14 @@ fi
 
 # ── TRIN 2c ───────────────────────────────────────────────────────────────────
 if should_run 2c; then
-step "2c" "Promover dev → prod (gh workflow dispatch)"
+step "2c" "Promover ARM64-image fra demo til prod"
 
 ascii "  PROMOVERING ER IKKE ET NYT BUILD"
 ascii "  ─────────────────────────────────────────────────────────"
 ascii ""
 ascii "  ┌──────────────────────┐"
 ascii "  │ Quay                 │"
-ascii "  │ :demo-v1-arm64       │"
+ascii "  │ ${IMAGE_GOOD##*:}     │"
 ascii "  │ digest: sha256:....  │"
 ascii "  └──────────┬───────────┘"
 ascii "             │ skopeo copy"
@@ -371,23 +384,25 @@ ascii "             │ samme digest"
 ascii "             ▼"
 ascii "  ┌──────────────────────┐"
 ascii "  │ Quay                 │"
-ascii "  │ :prod-arm64          │"
+ascii "  │ ${PROD_IMAGE_ARM##*:} │"
 ascii "  │ digest: sha256:....  │"
 ascii "  └──────────────────────┘"
 ascii ""
-ascii "  dev → prod ændrer tagget, ikke indholdet."
-ascii "   ✔  Det der blev testet i CI er præcis det, der kører i prod"
+ascii "  demo → prod ændrer ARM64-tagget, ikke indholdet."
+ascii "   ✔  Det samme klargjorte ARM64-image får et prod-tag"
 echo ""
-say "Promovering bruger skopeo copy – samme digest, bare et nyt :prod-tag."
-say "Intet nyt build: det der blev testet i CI er præcis det, der når prod."
-note "Udløser: gh workflow run promote-prod.yml --field source_tag=demo-v1-arm64"
+say "Promovering bruger skopeo copy – samme ARM64-digest, bare et nyt tag."
+say "Det påvirker kun ARM64-tagget; AMD64-produktionstagget ændres ikke."
 pause "Tryk ENTER for at fortsætte..." 
-run gh workflow run promote-prod.yml \
-  --repo waltherB/rhel10-bootc-github-quay-demo \
-  --field source_tag=demo-v1-arm64 || \
-  note "gh workflow dispatch sprunget over – kør manuelt hvis nødvendigt."
-note "Følger fremgang..."
-run gh run watch --repo waltherB/rhel10-bootc-github-quay-demo || true
+SOURCE_DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${IMAGE_GOOD}")"
+run skopeo copy --all --preserve-digests \
+  "docker://${IMAGE_GOOD}" "docker://${PROD_IMAGE_ARM}"
+PROMOTED_DIGEST="$(skopeo inspect --format '{{.Digest}}' "docker://${PROD_IMAGE_ARM}")"
+if [[ "${SOURCE_DIGEST}" != "${PROMOTED_DIGEST}" ]]; then
+  echo -e "${RED}  Promovering fejlede: digest ændrede sig (${SOURCE_DIGEST} → ${PROMOTED_DIGEST})${RESET}" >&2
+  exit 1
+fi
+note "Promoveret ${IMAGE_GOOD} → ${PROD_IMAGE_ARM} med digest ${PROMOTED_DIGEST}"
 pause "Promovering flytter referencen – den genbygger ikke indholdet. Tryk ENTER..."
 fi
 
@@ -679,12 +694,12 @@ if should_run 11 && [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
 
   ascii "  Den lokale demo brugte ARM64 i UTM; SNO kører AMD64-image nativt:"
   ascii ""
-  ascii "   ┌──────────────────────┐  skopeo copy     ┌────────────────────────────┐"
-  ascii "   │ Quay                 │ ───────────────► │ Quay                       │"
-  ascii "   │ :dev-disk-amd64      │  samme digest    │ :prod-disk-amd64           │"
-  ascii "   └──────────────────────┘                  └──────────────┬─────────────┘"
-  ascii "                                                            │  CDI import"
-  ascii "                                                            ▼"
+  ascii "   ┌──────────────────────┐  CDI import     ┌────────────────────────────┐"
+  ascii "   │ Quay                 │ ──────────────► │ OpenShift Virtualization   │"
+  ascii "   │ :dev-disk-amd64      │                 │ DataVolume                 │"
+  ascii "   └──────────────────────┘                 └──────────────┬─────────────┘"
+  ascii "                                                           │"
+  ascii "                                                           ▼"
   ascii "   ┌──────────────────────────────────────────────────────────────────────┐"
   ascii "   │  OpenShift Virtualization (SNO x86_64)                               │"
   ascii "   │                                                                      │"
@@ -692,7 +707,7 @@ if should_run 11 && [[ "${RUN_SNO_EXTENSION}" == "1" ]]; then
   ascii "   │    →  Namespace, PullSecret, DataVolume, VirtualMachine              │"
   ascii "   │                                                                      │"
   ascii "   │  bootc status  (via virtctl ssh)                                     │"
-  ascii "   │    booted: :prod-amd64                                               │"
+  ascii "   │    booted: :dev-amd64                                                │"
   ascii "   └──────────────────────────────────────────────────────────────────────┘"
   ascii ""
   ascii "   OpenShift styrer VM-platformen."

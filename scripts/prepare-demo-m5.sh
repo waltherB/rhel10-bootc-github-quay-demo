@@ -138,12 +138,10 @@ RequiresMountsFor=%t/containers
 Yaml=chatbot.yaml
 
 [Service]
-Restart=on-failure
-RestartSec=30
-TimeoutStartSec=1800
+Restart=always
 
 [Install]
-WantedBy=multi-user.target
+WantedBy=default.target
 EOF
 fi
 
