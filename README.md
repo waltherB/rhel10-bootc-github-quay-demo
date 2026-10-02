@@ -113,6 +113,16 @@ export IMAGE_ARM=quay.io/waba/bootc-guide:dev-arm64
 
 Import `output/qcow2/disk-arm.qcow2` in UTM to create a local ARM VM.
 
+To build the four M5 lifecycle images and verify their real boot/switch behavior in QEMU, run:
+
+```bash
+BUILD_OCPVIRT_DISK=0 TEST_QEMU=1 ./scripts/prepare-demo-m5.sh
+```
+
+The QEMU check boots a temporary copy-on-write overlay of `disk-arm.qcow2`, switches through the update, intentionally broken, and fixed images, and confirms the expected bootc deployment and HTTP behavior after each reboot. It requires `qemu-system-aarch64`, `qemu-img`, ARM UEFI firmware, and the configured SSH key. The source disk is not modified.
+
+When reusing an existing UTM disk with `BUILD_UTM_DISK=0`, preparation checks the source image digest recorded in `output/manifest-qcow2.json` against `IMAGE_GOOD` and fails early if the disk and switch base differ.
+
 ## Tagging strategy
 
 | Tag | Produced by | Content |

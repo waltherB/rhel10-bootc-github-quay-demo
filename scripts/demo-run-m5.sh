@@ -6,10 +6,21 @@ set -euo pipefail
 # demonstrerer den operationelle livscyklus med færdigpublicerede images.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Preserve any caller-supplied overrides before sourcing demo-env.sh,
+# which unconditionally exports some of the same variables.
+_VM_SSH_OVERRIDE="${VM_SSH:-}"
+_VM_SSH_KEY_OVERRIDE="${VM_SSH_KEY:-}"
+
 if [[ -f "${SCRIPT_DIR}/demo-env.sh" ]]; then
   # shellcheck source=/dev/null
   source "${SCRIPT_DIR}/demo-env.sh"
 fi
+
+# Re-apply caller overrides after the source (caller wins over demo-env.sh)
+[[ -n "${_VM_SSH_OVERRIDE}" ]]     && VM_SSH="${_VM_SSH_OVERRIDE}"
+[[ -n "${_VM_SSH_KEY_OVERRIDE}" ]] && VM_SSH_KEY="${_VM_SSH_KEY_OVERRIDE}"
+unset _VM_SSH_OVERRIDE _VM_SSH_KEY_OVERRIDE
 
 : "${QUAY_REPO:=quay.io/waba/bootc-guide}"
 : "${IMAGE_GOOD:=${QUAY_REPO}:demo-v1-arm64}"
@@ -39,6 +50,11 @@ RESET='\033[0m'
 pause() {
   local message="${1:-Tryk ENTER for at fortsætte...}"
   echo
+  # DEMO_AUTO=1: skip all interactive pauses (used for automated/QEMU testing)
+  if [[ "${DEMO_AUTO:-0}" == "1" ]]; then
+    echo -e "${BLUE}  ⏩  (auto-advancing)${RESET}"
+    return 0
+  fi
   echo -e "${BOLD}  ${message}${RESET}"
   read -r
 }
@@ -73,6 +89,9 @@ remote() {
   ssh -i "${VM_SSH_KEY}" \
     -o BatchMode=yes \
     -o StrictHostKeyChecking=no \
+    -o UserKnownHostsFile=/dev/null \
+    -o GlobalKnownHostsFile=/dev/null \
+    -o LogLevel=ERROR \
     -o ConnectTimeout=8 \
     "${VM_SSH}" "$@"
 }
@@ -510,9 +529,26 @@ else
   wait_for_vm
   run remote sudo bootc status
   run remote sudo systemctl daemon-reload
+  # Verify quadlet files landed correctly
+  note "Verificerer quadlet-filer i imaget:"
+  run remote ls -la /usr/share/containers/systemd/ || true
+  # Show unit status — service may be 'activating' (pulling AI images); that is expected and correct
   run remote sudo systemctl --no-pager --full status chatbot.service || true
-  run remote sudo systemctl list-unit-files --all | grep -Ei 'chatbot|llamacpp' || true
-  note "Chatbotten burde være tilgængelig på VM'ens port ${CHATBOT_PORT}."
+  # Show whether the unit is known to systemd
+  run remote sudo systemctl list-unit-files --all 2>/dev/null | grep -Ei 'chatbot' || \
+    note "chatbot unit ikke fundet — kør: sudo systemctl daemon-reload"
+  note "Chatbot-servicen trækker AI-modeller (~7 GB) i baggrunden."
+  note "Den er tilgængelig på port ${CHATBOT_PORT} når pull er færdigt."
+  # In DEMO_AUTO mode: assert the service is at least known (loaded), don't wait for active
+  if [[ "${DEMO_AUTO:-0}" == "1" ]]; then
+    _svc_state="$(remote sudo systemctl show chatbot.service --property=LoadState --value 2>/dev/null || echo unknown)"
+    if [[ "${_svc_state}" == "loaded" ]]; then
+      note "✓ chatbot.service er loaded af systemd (LoadState=${_svc_state})"
+    else
+      note "⚠ chatbot.service LoadState=${_svc_state} — quadlet-filer tilstede men service ikke loaded endnu"
+    fi
+    unset _svc_state
+  fi
 fi
 fi
 

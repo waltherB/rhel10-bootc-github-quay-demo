@@ -42,5 +42,10 @@ while IFS= read -r container_id; do
   podman logs "${container_id}" || true
 done < <(podman ps --filter "pod=${CHATBOT_NAME}" --format '{{.ID}}')
 echo
-echo "Stop with ENTER when the chatbot has been tested."
-read -r
+if [[ "${DEMO_AUTO:-0}" == "1" ]]; then
+  echo "(DEMO_AUTO=1: auto-stopping chatbot after 5s)"
+  sleep 5
+else
+  echo "Stop with ENTER when the chatbot has been tested."
+  read -r
+fi

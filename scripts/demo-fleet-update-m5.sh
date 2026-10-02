@@ -5,24 +5,27 @@ set -euo pipefail
 # Default mode is plan-only; use FLEET_APPLY=1 to execute the switch.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# Preserve caller overrides before sourcing demo-env.sh
 IMAGE_UPDATE_OVERRIDE="${IMAGE_UPDATE-}"
 IMAGE_UPDATE_WAS_SET="${IMAGE_UPDATE+x}"
 VM_TARGETS_OVERRIDE="${VM_TARGETS-}"
 VM_TARGETS_WAS_SET="${VM_TARGETS+x}"
 FLEET_APPLY_OVERRIDE="${FLEET_APPLY-}"
 FLEET_APPLY_WAS_SET="${FLEET_APPLY+x}"
+VM_SSH_KEY_OVERRIDE="${VM_SSH_KEY-}"
+VM_SSH_KEY_WAS_SET="${VM_SSH_KEY+x}"
+
 if [[ -f "${SCRIPT_DIR}/demo-env.sh" ]]; then
   # shellcheck source=/dev/null
   source "${SCRIPT_DIR}/demo-env.sh"
 fi
 
-if [[ -n "${IMAGE_UPDATE_WAS_SET}" ]]; then
-  IMAGE_UPDATE="${IMAGE_UPDATE_OVERRIDE}"
-else
-  IMAGE_UPDATE="${IMAGE_FIXED:-${QUAY_REPO:-quay.io/waba/bootc-guide}:demo-v3-fixed-arm64}"
-fi
+if [[ -n "${IMAGE_UPDATE_WAS_SET}" ]]; then IMAGE_UPDATE="${IMAGE_UPDATE_OVERRIDE}"
+else IMAGE_UPDATE="${IMAGE_FIXED:-${QUAY_REPO:-quay.io/waba/bootc-guide}:demo-v3-fixed-arm64}"; fi
 if [[ -n "${VM_TARGETS_WAS_SET}" ]]; then VM_TARGETS="${VM_TARGETS_OVERRIDE}"; fi
 if [[ -n "${FLEET_APPLY_WAS_SET}" ]]; then FLEET_APPLY="${FLEET_APPLY_OVERRIDE}"; fi
+if [[ -n "${VM_SSH_KEY_WAS_SET}" ]];  then VM_SSH_KEY="${VM_SSH_KEY_OVERRIDE}"; fi
 
 : "${VM_SSH_KEY:=${HOME}/.ssh/id_ed25519}"
 : "${VM_TARGETS:=${VM_SSH:-demo@192.168.64.18}}"
@@ -42,6 +45,9 @@ for target in ${VM_TARGETS}; do
     ssh -i "${VM_SSH_KEY}" \
       -o BatchMode=yes \
       -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -o GlobalKnownHostsFile=/dev/null \
+      -o LogLevel=ERROR \
       "${target}" sudo bootc switch "${IMAGE_UPDATE}"
   else
     printf '  %s: sudo bootc switch %s\n' "${target}" "${IMAGE_UPDATE}"
